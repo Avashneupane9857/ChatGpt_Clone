@@ -64,6 +64,7 @@ export const Message = ({
   };
 
   const renderFilePreview = (file: UploadedFile) => {
+    // Priority: cloudinaryUrl > content (base64) > placeholder
     const imageUrl = file.cloudinaryUrl || file.content;
 
     if (file.type.startsWith("image/")) {
@@ -71,14 +72,15 @@ export const Message = ({
         <div className="mb-3">
           <div className="relative max-w-xs">
             <Image
-              src={imageUrl}
+              src={imageUrl || "/placeholder-image.png"}
               alt={file.name}
               width={300}
               height={200}
               className="rounded-lg max-w-full h-auto shadow-md object-cover"
+              unoptimized={!!file.content} // Add unoptimized for base64 images
               onError={(e) => {
                 console.error("Image load error:", e);
-                e.currentTarget.style.display = "none";
+                e.currentTarget.src = "/placeholder-image.png";
               }}
             />
             <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs p-1 rounded-b-lg">
@@ -111,6 +113,7 @@ export const Message = ({
               <p className="text-xs text-white/60">
                 {formatFileSize(file.size)}
               </p>
+
               {file.uploadedAt && (
                 <p className="text-xs text-white/40">
                   Uploaded: {new Date(file.uploadedAt).toLocaleString()}
@@ -156,7 +159,7 @@ export const Message = ({
                 </div>
               )}
               {/* Display text content */}
-              <span>{content}</span>
+              {content && <span>{content}</span>}
             </div>
           ) : (
             <div className="flex gap-3">

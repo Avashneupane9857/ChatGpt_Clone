@@ -17,6 +17,7 @@ interface MessageType {
   role: string;
   content: string;
   timestamp: number;
+  files?: [];
 }
 
 export default function Home() {
@@ -213,6 +214,7 @@ export default function Home() {
                   key={index}
                   role={message.role}
                   content={message.content}
+                  files={message.files}
                   messageIndex={index}
                   onEditMessage={(messageIndex, content) => {
                     setEditingMessage({ messageIndex, content });

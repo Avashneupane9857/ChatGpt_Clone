@@ -161,16 +161,14 @@ export const PromptBox = ({
     if (file.type.startsWith("image/")) {
       return (
         <div className="relative group">
-          <div className="relative rounded-lg overflow-hidden bg-gray-800 max-w-[150px] max-h-[150px]">
+          <div className="relative rounded-lg overflow-hidden bg-gray-800 w-[120px] h-[120px]">
             <Image
               src={file.content}
               alt={file.name}
-              width={150}
-              height={150}
-              className="object-cover w-full h-full"
-              onError={(e) => {
-                console.error("Image load error:", e);
-              }}
+              fill
+              className="object-cover"
+              sizes="120px"
+              unoptimized // Add this for base64 images
             />
             {/* Overlay with file name */}
             <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all duration-200 flex items-end">
@@ -182,7 +180,7 @@ export const PromptBox = ({
           {/* Remove button */}
           <button
             onClick={() => removeFile(index)}
-            className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold transition-colors"
+            className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold transition-colors z-10"
           >
             ×
           </button>
@@ -454,39 +452,21 @@ export const PromptBox = ({
 
   return (
     <div className="w-full max-w-3xl">
-      {/* Enhanced File Upload Area */}
+      {/* Fixed File Upload Preview Area - ChatGPT Style */}
       {uploadedFiles.length > 0 && (
-        <div className="mb-4 p-4 bg-[#404040] rounded-xl border border-gray-600">
+        <div className="mb-3 p-3 bg-[#2f2f2f] rounded-2xl border border-gray-600">
           <div className="flex items-center gap-2 mb-3">
-            <span className="text-sm text-white/90 font-medium">
-              {uploadedFiles.length} file{uploadedFiles.length > 1 ? "s" : ""}{" "}
-              attached
+            <span className="text-sm text-white/80">
+              {uploadedFiles.length} file{uploadedFiles.length > 1 ? "s" : ""}
             </span>
           </div>
 
-          {/* Image previews in a grid layout */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-            {uploadedFiles
-              .filter((file) => file.type.startsWith("image/"))
-              .map((file, index) => (
-                <div key={`image-${index}`}>
-                  {renderFilePreview(file, index)}
-                </div>
-              ))}
+          {/* Compact horizontal layout for images like ChatGPT */}
+          <div className="flex flex-wrap gap-2">
+            {uploadedFiles.map((file, index) => (
+              <div key={index}>{renderFilePreview(file, index)}</div>
+            ))}
           </div>
-
-          {/* Non-image files in a separate section */}
-          {uploadedFiles.some((file) => !file.type.startsWith("image/")) && (
-            <div className="mt-4 space-y-2">
-              {uploadedFiles
-                .filter((file) => !file.type.startsWith("image/"))
-                .map((file, index) => (
-                  <div key={`doc-${index}`}>
-                    {renderFilePreview(file, uploadedFiles.indexOf(file))}
-                  </div>
-                ))}
-            </div>
-          )}
         </div>
       )}
 
