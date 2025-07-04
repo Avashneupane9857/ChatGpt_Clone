@@ -10,7 +10,9 @@ import { Message } from "@/components/Message";
 import { useAppContext } from "@/context/AppContext";
 import { assets } from "@/assets/assets";
 import { useClerk, UserButton } from "@clerk/nextjs";
-// Define the message type
+import axios from "axios";
+import toast from "react-hot-toast";
+
 interface MessageType {
   role: string;
   content: string;
@@ -27,21 +29,26 @@ export default function Home() {
     "Here to make your ideas real.",
     "Just say the word.",
     "Your AI sidekick reporting in.",
-    "What’s on your mind?",
-    "Let’s make something awesome.",
+    "What's on your mind?",
+    "Let's make something awesome.",
   ];
   const [message, setMessage] = useState("");
   const { openSignIn } = useClerk();
-  const { user } = useAppContext();
+  const { user, selectedChat, loadingChats, setSelectedChat, setChat } =
+    useAppContext();
+  const [editingMessage, setEditingMessage] = useState<{
+    messageIndex: number;
+    content: string;
+  } | null>(null);
+
   useEffect(() => {
     const randomIndex = Math.floor(Math.random() * greetings.length);
     setMessage(greetings[randomIndex]);
   }, []);
-  const [expand, setExpand] = useState(false);
 
+  const [expand, setExpand] = useState(false);
   const [messages, setMessages] = useState<MessageType[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const { selectedChat, loadingChats } = useAppContext();
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -67,6 +74,92 @@ export default function Home() {
     console.log("Selected Chat:", selectedChat);
   }, [loadingChats, selectedChat]);
 
+  const handleRegenerateResponse = async (messageIndex: number) => {
+    if (!selectedChat) return;
+
+    try {
+      setIsLoading(true);
+
+      const userMessageIndex = messageIndex - 1;
+      if (
+        userMessageIndex < 0 ||
+        selectedChat.messages[userMessageIndex].role !== "user"
+      ) {
+        toast.error("Cannot regenerate this response");
+        return;
+      }
+
+      const userMessage = selectedChat.messages[userMessageIndex];
+
+      const messagesBeforeRegenerate = selectedChat.messages.slice(
+        0,
+        userMessageIndex + 1
+      );
+
+      setSelectedChat((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          messages: messagesBeforeRegenerate,
+        };
+      });
+
+      const { data } = await axios.post("/api/chat/ai", {
+        chatId: selectedChat._id,
+        prompt: userMessage.content,
+      });
+
+      if (data.success) {
+        const message = data.data?.content || "No response received";
+        const messageTokens = message.split(" ");
+        const assistantMessage = {
+          role: "assistant" as const,
+          content: "",
+          timestamp: Date.now(),
+        };
+
+        setSelectedChat((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            messages: [...prev.messages, assistantMessage],
+          };
+        });
+
+        for (let i = 0; i < messageTokens.length; i++) {
+          setTimeout(() => {
+            assistantMessage.content = messageTokens.slice(0, i + 1).join(" ");
+            setSelectedChat((prev) => {
+              if (!prev) return null;
+              const updatedMessages = [
+                ...prev.messages.slice(0, -1),
+                { ...assistantMessage },
+              ];
+              return { ...prev, messages: updatedMessages };
+            });
+          }, i * 100);
+        }
+
+        setChat((prevChats) =>
+          prevChats.map((chatItem) =>
+            chatItem._id === selectedChat._id
+              ? { ...chatItem, messages: [...chatItem.messages, data.data!] }
+              : chatItem
+          )
+        );
+
+        toast.success("Response regenerated");
+      } else {
+        toast.error(data.message || "Failed to regenerate response");
+      }
+    } catch (error) {
+      console.error("Error regenerating response:", error);
+      toast.error("Failed to regenerate response");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div>
       <div className="flex h-screen">
@@ -74,19 +167,6 @@ export default function Home() {
         <div className="flex-1 flex flex-col items-center justify-center px-4 pb-8 bg-[#212121] text-white relative">
           <button className="hover:bg-[#3E3F4B] absolute top-4 left-4 text-white px-4 py-2 rounded-md flex items-center gap-1">
             ChatGPT
-            <svg
-              className="w-4 h-4 text-gray-400"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M19 9l-7 7-7-7"
-              />
-            </svg>
           </button>
           <div className="absolute top-2 right-2">
             <div
@@ -128,11 +208,16 @@ export default function Home() {
               <p className="fixed top-8 border-transparent hover:border-gray-500/50 py-1 px-2 rounded-lg font-semibold mb-6">
                 {selectedChat?.name || "Untitled Chat"}
               </p>
-              {messages.map((msg, index) => (
+              {selectedChat?.messages?.map((message, index) => (
                 <Message
-                  key={`${msg.timestamp}-${index}`}
-                  role={msg.role as "user" | "assistant"}
-                  content={msg.content}
+                  key={index}
+                  role={message.role}
+                  content={message.content}
+                  messageIndex={index}
+                  onEditMessage={(messageIndex, content) => {
+                    setEditingMessage({ messageIndex, content });
+                  }}
+                  onRegenerateResponse={handleRegenerateResponse}
                 />
               ))}
               {isLoading && (
@@ -151,7 +236,12 @@ export default function Home() {
               )}
             </div>
           )}
-          <PromptBox isLoading={isLoading} setIsLoading={setIsLoading} />
+          <PromptBox
+            setIsLoading={setIsLoading}
+            isLoading={isLoading}
+            editingMessage={editingMessage}
+            setEditingMessage={setEditingMessage}
+          />
           <p className="text-xs absolute bottom-1 text-white">
             ChatGPT can make mistakes. Check important info.{" "}
           </p>

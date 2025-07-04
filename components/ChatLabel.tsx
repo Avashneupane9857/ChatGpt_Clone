@@ -48,7 +48,6 @@ export const ChatLabel = ({
         toast.error(data.message);
       }
     } catch (error: unknown) {
-      // Changed from any to unknown
       if (error instanceof Error) {
         toast.error(error.message);
       } else {

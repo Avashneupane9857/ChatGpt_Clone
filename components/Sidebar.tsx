@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { useClerk, UserButton } from "@clerk/nextjs";
+
 import { assets } from "../assets/assets";
 import { useAppContext } from "@/context/AppContext";
 import { ChatLabel } from "./ChatLabel";
@@ -11,8 +11,7 @@ interface SidebarProps {
 }
 
 export const Sidebar = ({ expand, setExpand }: SidebarProps) => {
-  const { openSignIn } = useClerk();
-  const { user, chat, createNewChat } = useAppContext();
+  const { chat, createNewChat } = useAppContext();
   const [openMenu, setOpenMenu] = useState({ id: "", open: false });
 
   return (
@@ -94,7 +93,6 @@ export const Sidebar = ({ expand, setExpand }: SidebarProps) => {
           ))}
         </div>
       </div>
-    
     </div>
   );
 };
