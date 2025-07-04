@@ -5,10 +5,18 @@ import Markdown from "react-markdown";
 import Prism from "prismjs";
 import toast from "react-hot-toast";
 
+interface UploadedFile {
+  name: string;
+  type: string;
+  size: number;
+  content: string;
+}
+
 interface MessageProps {
   role: "user" | "assistant";
   content: string | ReactNode;
   messageIndex: number;
+  files?: UploadedFile[];
   onEditMessage?: (messageIndex: number, content: string) => void;
   onRegenerateResponse?: (messageIndex: number) => void;
 }
@@ -17,6 +25,7 @@ export const Message = ({
   role,
   content,
   messageIndex,
+  files = [],
   onEditMessage,
   onRegenerateResponse,
 }: MessageProps) => {
@@ -43,6 +52,49 @@ export const Message = ({
     }
   };
 
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return "0 Bytes";
+    const k = 1024;
+    const sizes = ["Bytes", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  };
+
+  const renderFilePreview = (file: UploadedFile) => {
+    if (file.type.startsWith("image/")) {
+      return (
+        <div className="mb-3">
+          <div className="relative max-w-xs">
+            <Image
+              src={file.content}
+              alt={file.name}
+              className="rounded-lg max-w-full h-auto shadow-md"
+            />
+            <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs p-1 rounded-b-lg">
+              {file.name}
+            </div>
+          </div>
+        </div>
+      );
+    } else {
+      return (
+        <div className="mb-3 p-3 bg-[#404040] rounded-lg border border-gray-600">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-blue-500 rounded flex items-center justify-center">
+              <span className="text-xs text-white">📄</span>
+            </div>
+            <div>
+              <p className="text-sm text-white font-medium">{file.name}</p>
+              <p className="text-xs text-white/60">
+                {formatFileSize(file.size)}
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+  };
+
   return (
     <div className="flex flex-col items-center text-sm w-full max-w-3xl">
       <div
@@ -56,7 +108,18 @@ export const Message = ({
           }`}
         >
           {role === "user" ? (
-            <span className="text-white/90">{content}</span>
+            <div className="text-white/90">
+              {/* Display uploaded files */}
+              {files && files.length > 0 && (
+                <div className="mb-3">
+                  {files.map((file, index) => (
+                    <div key={index}>{renderFilePreview(file)}</div>
+                  ))}
+                </div>
+              )}
+              {/* Display text content */}
+              <span>{content}</span>
+            </div>
           ) : (
             <div className="flex gap-3">
               <div className="space-y-4 w-full overflow-scroll">
@@ -68,6 +131,7 @@ export const Message = ({
               </div>
             </div>
           )}
+
           <div className="flex gap-3 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
             <Image
               onClick={copyMessage}
