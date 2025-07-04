@@ -9,7 +9,7 @@ interface UploadedFile {
   name: string;
   type: string;
   size: number;
-  content?: string; // For backward compatibility
+  content?: string;
   cloudinaryUrl?: string;
   cloudinaryPublicId?: string;
   uploadedAt?: Date;

@@ -157,6 +157,76 @@ export const PromptBox = ({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   };
 
+  const renderFilePreview = (file: UploadedFile, index: number) => {
+    if (file.type.startsWith("image/")) {
+      return (
+        <div className="relative group">
+          <div className="relative rounded-lg overflow-hidden bg-gray-800 max-w-[150px] max-h-[150px]">
+            <Image
+              src={file.content}
+              alt={file.name}
+              width={150}
+              height={150}
+              className="object-cover w-full h-full"
+              onError={(e) => {
+                console.error("Image load error:", e);
+              }}
+            />
+            {/* Overlay with file name */}
+            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all duration-200 flex items-end">
+              <div className="p-2 text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200 truncate w-full">
+                {file.name}
+              </div>
+            </div>
+          </div>
+          {/* Remove button */}
+          <button
+            onClick={() => removeFile(index)}
+            className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold transition-colors"
+          >
+            ×
+          </button>
+          {/* File size indicator */}
+          <div className="absolute top-1 left-1 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded">
+            {formatFileSize(file.size)}
+          </div>
+        </div>
+      );
+    } else {
+      return (
+        <div className="flex items-center justify-between bg-[#505050] p-3 rounded-lg min-w-[200px] group">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0">
+              <span className="text-sm text-white font-semibold">
+                {file.type.includes("pdf")
+                  ? "PDF"
+                  : file.type.includes("word")
+                  ? "DOC"
+                  : file.type.includes("excel") || file.type.includes("csv")
+                  ? "XLS"
+                  : "TXT"}
+              </span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-white truncate max-w-[150px]">
+                {file.name}
+              </p>
+              <p className="text-xs text-white/60">
+                {formatFileSize(file.size)}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => removeFile(index)}
+            className="text-red-400 hover:text-red-300 text-lg ml-2 opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            ×
+          </button>
+        </div>
+      );
+    }
+  };
+
   const handleEditMessage = async (
     e:
       | React.FormEvent<HTMLFormElement>
@@ -384,46 +454,39 @@ export const PromptBox = ({
 
   return (
     <div className="w-full max-w-3xl">
-      {/* File Upload Area */}
+      {/* Enhanced File Upload Area */}
       {uploadedFiles.length > 0 && (
-        <div className="mb-4 p-3 bg-[#404040] rounded-xl">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-sm text-white/80">Uploaded files:</span>
+        <div className="mb-4 p-4 bg-[#404040] rounded-xl border border-gray-600">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-sm text-white/90 font-medium">
+              {uploadedFiles.length} file{uploadedFiles.length > 1 ? "s" : ""}{" "}
+              attached
+            </span>
           </div>
-          <div className="space-y-2">
-            {uploadedFiles.map((file, index) => (
-              <div
-                key={index}
-                className="flex items-center justify-between bg-[#505050] p-2 rounded-lg"
-              >
-                <div className="flex items-center gap-2">
-                  {file.type.startsWith("image/") ? (
-                    <div className="w-8 h-8 bg-blue-500 rounded flex items-center justify-center">
-                      <span className="text-xs text-white">IMG</span>
-                    </div>
-                  ) : (
-                    <div className="w-8 h-8 bg-green-500 rounded flex items-center justify-center">
-                      <span className="text-xs text-white">DOC</span>
-                    </div>
-                  )}
-                  <div>
-                    <p className="text-sm text-white truncate max-w-[200px]">
-                      {file.name}
-                    </p>
-                    <p className="text-xs text-white/60">
-                      {formatFileSize(file.size)}
-                    </p>
-                  </div>
+
+          {/* Image previews in a grid layout */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {uploadedFiles
+              .filter((file) => file.type.startsWith("image/"))
+              .map((file, index) => (
+                <div key={`image-${index}`}>
+                  {renderFilePreview(file, index)}
                 </div>
-                <button
-                  onClick={() => removeFile(index)}
-                  className="text-red-400 hover:text-red-300 text-lg"
-                >
-                  ×
-                </button>
-              </div>
-            ))}
+              ))}
           </div>
+
+          {/* Non-image files in a separate section */}
+          {uploadedFiles.some((file) => !file.type.startsWith("image/")) && (
+            <div className="mt-4 space-y-2">
+              {uploadedFiles
+                .filter((file) => !file.type.startsWith("image/"))
+                .map((file, index) => (
+                  <div key={`doc-${index}`}>
+                    {renderFilePreview(file, uploadedFiles.indexOf(file))}
+                  </div>
+                ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -451,17 +514,17 @@ export const PromptBox = ({
             setPrompt(e.target.value)
           }
           value={prompt}
-          className="outline-none w-full resize-none overflow-hidden break-words bg-transparent"
+          className="outline-none w-full resize-none overflow-hidden break-words bg-transparent text-white placeholder-gray-400"
           rows={2}
           placeholder={editingMessage ? "Edit your message..." : "Ask Anything"}
         />
-        <div className="flex items-center justify-between text-sm">
+        <div className="flex items-center justify-between text-sm mt-3">
           <div className="flex items-center gap-2">
-            <p className="flex items-center gap-2 text-xs border border-gray-300/40 py-1 p-2 rounded-full cursor-pointer hover:bg-gray-500/20 transition">
+            <p className="flex items-center gap-2 text-xs border border-gray-300/40 py-1 p-2 rounded-full cursor-pointer hover:bg-gray-500/20 transition text-white/80">
               <Image src={assets.deepthink_icon} alt="" />
               ChatGpt
             </p>
-            <p className="flex items-center gap-2 text-xs border border-gray-300/40 px-2 py-1 rounded-full cursor-pointer hover:bg-gray-500/20 transition">
+            <p className="flex items-center gap-2 text-xs border border-gray-300/40 px-2 py-1 rounded-full cursor-pointer hover:bg-gray-500/20 transition text-white/80">
               <Image src={assets.search_icon} alt="" />
               Search
             </p>
@@ -478,18 +541,19 @@ export const PromptBox = ({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-1 text-xs    cursor-pointer hover:text-slate-300 transition"
+              className="flex items-center gap-1 text-xs cursor-pointer hover:text-slate-300 transition text-white/80"
+              title="Attach files"
             >
-              <span className="text-3xl ">+</span>
+              <span className="text-2xl">📎</span>
             </button>
 
             {editingMessage && (
               <button
                 type="button"
                 onClick={cancelEdit}
-                className="bg-gray-600 hover:bg-gray-500 rounded-full p-2 cursor-pointer transition-colors"
+                className="bg-gray-600 hover:bg-gray-500 rounded-full px-3 py-1 cursor-pointer transition-colors text-xs text-white"
               >
-                <span className="text-xs">Cancel</span>
+                Cancel
               </button>
             )}
             <button
@@ -501,7 +565,7 @@ export const PromptBox = ({
                 prompt.trim() || uploadedFiles.length > 0
                   ? "bg-primary"
                   : "bg-[#71717a]"
-              } rounded-full p-2 cursor-pointer disabled:opacity-50`}
+              } rounded-full p-2 cursor-pointer disabled:opacity-50 transition-colors`}
             >
               <Image
                 src={
@@ -510,7 +574,7 @@ export const PromptBox = ({
                     : assets.arrow_icon_dull
                 }
                 alt=""
-                className="w-3.5 aspect-square "
+                className="w-3.5 aspect-square"
               />
             </button>
           </div>
