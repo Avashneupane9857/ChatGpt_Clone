@@ -4,6 +4,7 @@ import { getAuth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/config/db";
 import Chat from "@/models/Chat";
+import { uploadToCloudinary } from "../../../../config/cloudinary";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
@@ -14,9 +15,42 @@ interface UploadedFile {
   type: string;
   size: number;
   content: string;
+  cloudinaryUrl?: string;
+  cloudinaryPublicId?: string;
 }
 
 console.log("API Key loaded:", process.env.OPENAI_API_KEY?.slice(0, 10));
+
+// Function to upload files to Cloudinary
+const uploadFilesToCloudinary = async (files: UploadedFile[]) => {
+  const uploadPromises = files.map(async (file) => {
+    try {
+      let fileBuffer;
+      
+      if (file.type.startsWith('image/')) {
+        // For images, content is base64 data URL
+        const base64Data = file.content.split(',')[1];
+        fileBuffer = Buffer.from(base64Data, 'base64');
+      } else {
+        // For text files, convert content to buffer
+        fileBuffer = Buffer.from(file.content, 'utf8');
+      }
+
+      const { url, publicId } = await uploadToCloudinary(fileBuffer, file.name, file.type);
+      
+      return {
+        ...file,
+        cloudinaryUrl: url,
+        cloudinaryPublicId: publicId,
+      };
+    } catch (error) {
+      console.error(`Failed to upload ${file.name}:`, error);
+      throw new Error(`Failed to upload ${file.name}`);
+    }
+  });
+
+  return Promise.all(uploadPromises);
+};
 
 // Function to process file content based on type
 const processFileContent = (file: UploadedFile): string => {
@@ -36,7 +70,7 @@ const processFileContent = (file: UploadedFile): string => {
 };
 
 // Function to create OpenAI messages with file support
-const createMessagesWithFiles = (messages: any[], files: UploadedFile[] = []) => {
+const createMessagesWithFiles = (messages: any[]) => {
   return messages.map(msg => {
     if (msg.role === 'user' && msg.files && msg.files.length > 0) {
       let content = msg.content;
@@ -44,7 +78,7 @@ const createMessagesWithFiles = (messages: any[], files: UploadedFile[] = []) =>
       // Process each file
       msg.files.forEach((file: UploadedFile) => {
         if (file.type.startsWith('image/')) {
-          // For images, use OpenAI's vision capability
+          // For images, use OpenAI's vision capability with Cloudinary URL
           return {
             role: msg.role,
             content: [
@@ -55,7 +89,7 @@ const createMessagesWithFiles = (messages: any[], files: UploadedFile[] = []) =>
               {
                 type: "image_url",
                 image_url: {
-                  url: file.content
+                  url: file.cloudinaryUrl || file.content
                 }
               }
             ]
@@ -95,10 +129,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: "Chat not found" });
     }
 
+    // Upload files to Cloudinary if any
+    let uploadedFiles: UploadedFile[] = [];
+    if (files.length > 0) {
+      try {
+        uploadedFiles = await uploadFilesToCloudinary(files);
+      } catch (error) {
+        return NextResponse.json({ 
+          success: false, 
+          message: "Failed to upload files to Cloudinary" 
+        });
+      }
+    }
+
     // Create user message with files
     let userContent = prompt;
-    if (files.length > 0) {
-      files.forEach((file: UploadedFile) => {
+    if (uploadedFiles.length > 0) {
+      uploadedFiles.forEach((file: UploadedFile) => {
         if (!file.type.startsWith('image/')) {
           userContent += `\n\n${processFileContent(file)}`;
         }
@@ -109,7 +156,14 @@ export async function POST(req: NextRequest) {
       role: "user",
       content: userContent,
       timestamp: Date.now(),
-      files: files
+      files: uploadedFiles.map(file => ({
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        cloudinaryUrl: file.cloudinaryUrl,
+        cloudinaryPublicId: file.cloudinaryPublicId,
+        uploadedAt: new Date()
+      }))
     };
 
     if (isEdit && typeof editIndex === 'number') {
@@ -120,19 +174,18 @@ export async function POST(req: NextRequest) {
     }
 
     // Prepare messages for OpenAI
-    const conversationMessages = createMessagesWithFiles(chat.messages, files);
+    const conversationMessages = createMessagesWithFiles(chat.messages);
 
     // Check if we have images to use GPT-4 Vision
-    const hasImages = files.some((file: UploadedFile) => file.type.startsWith('image/'));
+    const hasImages = uploadedFiles.some((file: UploadedFile) => file.type.startsWith('image/'));
     const model = hasImages ? "gpt-4o" : "gpt-3.5-turbo";
 
     let completion;
     
     if (hasImages) {
       // For images, use the vision model with specific message format
-      const latestMessage = conversationMessages[conversationMessages.length - 1];
-      
       const visionMessages = [];
+      
       // Add conversation context (last few messages without images)
       const contextMessages = conversationMessages.slice(-5, -1).map(msg => ({
         role: msg.role,
@@ -148,12 +201,12 @@ export async function POST(req: NextRequest) {
         text: prompt
       });
       
-      files.forEach((file: UploadedFile) => {
+      uploadedFiles.forEach((file: UploadedFile) => {
         if (file.type.startsWith('image/')) {
           currentMessageContent.push({
             type: "image_url",
             image_url: {
-              url: file.content
+              url: file.cloudinaryUrl || file.content
             }
           });
         }
@@ -165,7 +218,7 @@ export async function POST(req: NextRequest) {
       });
 
       completion = await openai.chat.completions.create({
-      model: "gpt-4o",
+        model: "gpt-4o",
         messages: visionMessages,
         max_tokens: 1000,
         stream: false

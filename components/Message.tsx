@@ -9,7 +9,10 @@ interface UploadedFile {
   name: string;
   type: string;
   size: number;
-  content: string;
+  content?: string; // For backward compatibility
+  cloudinaryUrl?: string;
+  cloudinaryPublicId?: string;
+  uploadedAt?: Date;
 }
 
 interface MessageProps {
@@ -61,18 +64,38 @@ export const Message = ({
   };
 
   const renderFilePreview = (file: UploadedFile) => {
+    const imageUrl = file.cloudinaryUrl || file.content;
+
     if (file.type.startsWith("image/")) {
       return (
         <div className="mb-3">
           <div className="relative max-w-xs">
             <Image
-              src={file.content}
+              src={imageUrl}
               alt={file.name}
-              className="rounded-lg max-w-full h-auto shadow-md"
+              width={300}
+              height={200}
+              className="rounded-lg max-w-full h-auto shadow-md object-cover"
+              onError={(e) => {
+                console.error("Image load error:", e);
+                e.currentTarget.style.display = "none";
+              }}
             />
             <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs p-1 rounded-b-lg">
               {file.name}
             </div>
+            {file.cloudinaryUrl && (
+              <div className="absolute top-2 right-2">
+                <a
+                  href={file.cloudinaryUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-black/50 text-white text-xs px-2 py-1 rounded hover:bg-black/70"
+                >
+                  View Full
+                </a>
+              </div>
+            )}
           </div>
         </div>
       );
@@ -83,12 +106,27 @@ export const Message = ({
             <div className="w-8 h-8 bg-blue-500 rounded flex items-center justify-center">
               <span className="text-xs text-white">📄</span>
             </div>
-            <div>
+            <div className="flex-1">
               <p className="text-sm text-white font-medium">{file.name}</p>
               <p className="text-xs text-white/60">
                 {formatFileSize(file.size)}
               </p>
+              {file.uploadedAt && (
+                <p className="text-xs text-white/40">
+                  Uploaded: {new Date(file.uploadedAt).toLocaleString()}
+                </p>
+              )}
             </div>
+            {file.cloudinaryUrl && (
+              <a
+                href={file.cloudinaryUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-blue-400 hover:text-blue-300 underline"
+              >
+                Download
+              </a>
+            )}
           </div>
         </div>
       );
