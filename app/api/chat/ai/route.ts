@@ -1,14 +1,11 @@
 export const maxDuration = 60;
-import OpenAI from "openai";
+import { openai } from '@ai-sdk/openai';
+import { streamText, generateText } from 'ai';
 import { getAuth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/config/db";
 import Chat from "@/models/Chat";
 import { uploadToCloudinary } from "../../../../config/cloudinary";
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
 
 interface UploadedFile {
   name: string;
@@ -19,8 +16,6 @@ interface UploadedFile {
   cloudinaryPublicId?: string;
 }
 
-console.log("API Key loaded:", process.env.OPENAI_API_KEY?.slice(0, 10));
-
 // Function to upload files to Cloudinary
 const uploadFilesToCloudinary = async (files: UploadedFile[]) => {
   const uploadPromises = files.map(async (file) => {
@@ -28,11 +23,9 @@ const uploadFilesToCloudinary = async (files: UploadedFile[]) => {
       let fileBuffer;
       
       if (file.type.startsWith('image/')) {
-        // For images, content is base64 data URL
         const base64Data = file.content.split(',')[1];
         fileBuffer = Buffer.from(base64Data, 'base64');
       } else {
-        // For text files, convert content to buffer
         fileBuffer = Buffer.from(file.content, 'utf8');
       }
 
@@ -69,31 +62,27 @@ const processFileContent = (file: UploadedFile): string => {
   }
 };
 
-// Function to create OpenAI messages with file support
+// Function to create messages with file support for Vercel AI SDK
 const createMessagesWithFiles = (messages: any[]) => {
   return messages.map(msg => {
     if (msg.role === 'user' && msg.files && msg.files.length > 0) {
       let content = msg.content;
+      const messageContent = [];
       
+      // Add text content
+      messageContent.push({
+        type: "text",
+        text: content
+      });
+
       // Process each file
       msg.files.forEach((file: UploadedFile) => {
         if (file.type.startsWith('image/')) {
-          // For images, use OpenAI's vision capability with Cloudinary URL
-          return {
-            role: msg.role,
-            content: [
-              {
-                type: "text",
-                text: content
-              },
-              {
-                type: "image_url",
-                image_url: {
-                  url: file.cloudinaryUrl || file.content
-                }
-              }
-            ]
-          };
+          // For images, use Vercel AI SDK image format
+          messageContent.push({
+            type: "image",
+            image: file.cloudinaryUrl || file.content
+          });
         } else {
           // For other files, append content as text
           content += `\n\n${processFileContent(file)}`;
@@ -102,7 +91,7 @@ const createMessagesWithFiles = (messages: any[]) => {
       
       return {
         role: msg.role,
-        content: content
+        content: messageContent.length > 1 ? messageContent : content
       };
     }
     
@@ -116,7 +105,7 @@ const createMessagesWithFiles = (messages: any[]) => {
 export async function POST(req: NextRequest) {
   try {
     const { userId } = getAuth(req);
-    const { chatId, prompt, files = [], isEdit, editIndex } = await req.json();
+    const { chatId, prompt, files = [], isEdit, editIndex, stream = false } = await req.json();
 
     if (!userId) {
       return NextResponse.json({ success: false, message: "User not authenticated" });
@@ -173,77 +162,96 @@ export async function POST(req: NextRequest) {
       chat.messages.push(userPrompt);
     }
 
-    // Prepare messages for OpenAI
+    // Prepare messages for Vercel AI SDK
     const conversationMessages = createMessagesWithFiles(chat.messages);
 
     // Check if we have images to use GPT-4 Vision
     const hasImages = uploadedFiles.some((file: UploadedFile) => file.type.startsWith('image/'));
     const model = hasImages ? "gpt-4o" : "gpt-3.5-turbo";
 
-    let completion;
-    
-    if (hasImages) {
-      // For images, use the vision model with specific message format
-      const visionMessages = [];
-      
-      // Add conversation context (last few messages without images)
-      const contextMessages = conversationMessages.slice(-5, -1).map(msg => ({
-        role: msg.role,
-        content: typeof msg.content === 'string' ? msg.content : msg.content[0]?.text || ''
-      }));
-      
-      visionMessages.push(...contextMessages);
-      
-      // Add the current message with image
-      const currentMessageContent = [];
-      currentMessageContent.push({
-        type: "text",
-        text: prompt
+    if (stream) {
+      // Streaming response using Vercel AI SDK
+      const result = await streamText({
+        model: openai(model),
+        messages: conversationMessages,
+        maxTokens: hasImages ? 1000 : undefined,
       });
-      
-      uploadedFiles.forEach((file: UploadedFile) => {
-        if (file.type.startsWith('image/')) {
-          currentMessageContent.push({
-            type: "image_url",
-            image_url: {
-              url: file.cloudinaryUrl || file.content
+
+      // Handle streaming response
+      const stream = new ReadableStream({
+        async start(controller) {
+          const encoder = new TextEncoder();
+          let fullContent = '';
+          
+          try {
+            for await (const chunk of result.textStream) {
+              fullContent += chunk;
+              const data = JSON.stringify({ 
+                content: chunk,
+                fullContent: fullContent,
+                done: false 
+              });
+              controller.enqueue(encoder.encode(`data: ${data}\n\n`));
             }
-          });
+            
+            // Save the complete message to database
+            const message = {
+              role: "assistant",
+              content: fullContent,
+              timestamp: Date.now()
+            };
+            
+            chat.messages.push(message);
+            await chat.save();
+            
+            // Send final chunk
+            const finalData = JSON.stringify({ 
+              content: '',
+              fullContent: fullContent,
+              done: true,
+              message: message
+            });
+            controller.enqueue(encoder.encode(`data: ${finalData}\n\n`));
+            
+          } catch (error) {
+            console.error('Streaming error:', error);
+            const errorData = JSON.stringify({ 
+              error: error instanceof Error ? error.message : "Unknown error",
+              done: true 
+            });
+            controller.enqueue(encoder.encode(`data: ${errorData}\n\n`));
+          } finally {
+            controller.close();
+          }
         }
       });
-      
-      visionMessages.push({
-        role: "user",
-        content: currentMessageContent
-      });
 
-      completion = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: visionMessages,
-        max_tokens: 1000,
-        stream: false
+      return new Response(stream, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+        },
       });
     } else {
-      // For text-only messages, use regular GPT
-      completion = await openai.chat.completions.create({
+      // Non-streaming response using Vercel AI SDK
+      const result = await generateText({
+        model: openai(model),
         messages: conversationMessages,
-        model: "gpt-3.5-turbo",
-        stream: false
+        maxTokens: hasImages ? 1000 : undefined,
       });
+
+      const message = {
+        role: "assistant",
+        content: result.text,
+        timestamp: Date.now()
+      };
+
+      chat.messages.push(message);
+      await chat.save();
+
+      return NextResponse.json({ success: true, data: message });
     }
-
-    const rawMessage = completion.choices[0].message;
-    const message = {
-      ...rawMessage,
-      timestamp: Date.now()
-    };
-
-    chat.messages.push(message);
-    console.log(message);
-    
-    await chat.save();
-
-    return NextResponse.json({ success: true, data: message });
   } catch (error) {
     console.log("Error in /api/chat/ai:", error);
     console.error(error);

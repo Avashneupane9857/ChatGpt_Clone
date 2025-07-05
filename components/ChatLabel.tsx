@@ -123,7 +123,6 @@ export const ChatLabel = ({
           } group-hover:block`}
         />
 
-        {/* Dropdown Menu */}
         {openMenu.id === id && openMenu.open && (
           <div className="absolute right-0 top-8 bg-[#353535] rounded-xl w-max p-2 shadow-lg z-20">
             <div

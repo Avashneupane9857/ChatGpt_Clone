@@ -64,7 +64,6 @@ export const Message = ({
   };
 
   const renderFilePreview = (file: UploadedFile) => {
-    // Priority: cloudinaryUrl > content (base64) > placeholder
     const imageUrl = file.cloudinaryUrl || file.content;
 
     if (file.type.startsWith("image/")) {
@@ -77,7 +76,7 @@ export const Message = ({
               width={300}
               height={200}
               className="rounded-lg max-w-full h-auto shadow-md object-cover"
-              unoptimized={!!file.content} // Add unoptimized for base64 images
+              unoptimized={!!file.content}
               onError={(e) => {
                 console.error("Image load error:", e);
                 e.currentTarget.src = "/placeholder-image.png";
@@ -150,7 +149,6 @@ export const Message = ({
         >
           {role === "user" ? (
             <div className="text-white/90">
-              {/* Display uploaded files */}
               {files && files.length > 0 && (
                 <div className="mb-3">
                   {files.map((file, index) => (
@@ -158,7 +156,7 @@ export const Message = ({
                   ))}
                 </div>
               )}
-              {/* Display text content */}
+
               {content && <span>{content}</span>}
             </div>
           ) : (

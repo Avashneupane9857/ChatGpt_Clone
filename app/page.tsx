@@ -1,3 +1,4 @@
+// 1. Update your Home component (main changes)
 "use client";
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
@@ -10,7 +11,7 @@ import { Message } from "@/components/Message";
 import { useAppContext } from "@/context/AppContext";
 import { assets } from "@/assets/assets";
 import { useClerk, UserButton } from "@clerk/nextjs";
-import axios from "axios";
+
 import toast from "react-hot-toast";
 
 interface MessageType {
@@ -50,6 +51,8 @@ export default function Home() {
   const [expand, setExpand] = useState(false);
   const [messages, setMessages] = useState<MessageType[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [streamingMessage, setStreamingMessage] = useState<string>("");
+  const [isStreaming, setIsStreaming] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -68,12 +71,118 @@ export default function Home() {
         behavior: "smooth",
       });
     }
-  }, [messages]);
+  }, [messages, streamingMessage]);
 
   useEffect(() => {
     console.log("Loading:", loadingChats);
     console.log("Selected Chat:", selectedChat);
   }, [loadingChats, selectedChat]);
+
+  // New streaming function
+  const handleStreamingResponse = async (
+    chatId: string,
+    prompt: string,
+    files: any[] = []
+  ) => {
+    try {
+      setIsLoading(true);
+      setIsStreaming(true);
+      setStreamingMessage("");
+
+      const response = await fetch("/api/chat/ai", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          chatId,
+          prompt,
+          files,
+          stream: true,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to get response");
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error("No reader available");
+      }
+
+      let fullContent = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split("\n");
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+
+              if (data.error) {
+                throw new Error(data.error);
+              }
+
+              if (data.content) {
+                fullContent += data.content;
+                setStreamingMessage(fullContent);
+              }
+
+              if (data.done) {
+                // Streaming complete, update the chat
+                const finalMessage = data.message || {
+                  role: "assistant",
+                  content: fullContent,
+                  timestamp: Date.now(),
+                };
+
+                setSelectedChat((prev) => {
+                  if (!prev) return null;
+                  return {
+                    ...prev,
+                    messages: [...prev.messages, finalMessage],
+                  };
+                });
+
+                setChat((prevChats) =>
+                  prevChats.map((chatItem) =>
+                    chatItem._id === chatId
+                      ? {
+                          ...chatItem,
+                          messages: [...chatItem.messages, finalMessage],
+                        }
+                      : chatItem
+                  )
+                );
+
+                setStreamingMessage("");
+                setIsStreaming(false);
+                toast.success("Response received");
+                return;
+              }
+            } catch (parseError) {
+              console.error("Error parsing streaming data:", parseError);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error in streaming response:", error);
+      toast.error("Failed to get response");
+      setStreamingMessage("");
+      setIsStreaming(false);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleRegenerateResponse = async (messageIndex: number) => {
     if (!selectedChat) return;
@@ -105,54 +214,12 @@ export default function Home() {
         };
       });
 
-      const { data } = await axios.post("/api/chat/ai", {
-        chatId: selectedChat._id,
-        prompt: userMessage.content,
-      });
-
-      if (data.success) {
-        const message = data.data?.content || "No response received";
-        const messageTokens = message.split(" ");
-        const assistantMessage = {
-          role: "assistant" as const,
-          content: "",
-          timestamp: Date.now(),
-        };
-
-        setSelectedChat((prev) => {
-          if (!prev) return null;
-          return {
-            ...prev,
-            messages: [...prev.messages, assistantMessage],
-          };
-        });
-
-        for (let i = 0; i < messageTokens.length; i++) {
-          setTimeout(() => {
-            assistantMessage.content = messageTokens.slice(0, i + 1).join(" ");
-            setSelectedChat((prev) => {
-              if (!prev) return null;
-              const updatedMessages = [
-                ...prev.messages.slice(0, -1),
-                { ...assistantMessage },
-              ];
-              return { ...prev, messages: updatedMessages };
-            });
-          }, i * 100);
-        }
-
-        setChat((prevChats) =>
-          prevChats.map((chatItem) =>
-            chatItem._id === selectedChat._id
-              ? { ...chatItem, messages: [...chatItem.messages, data.data!] }
-              : chatItem
-          )
-        );
-
-        toast.success("Response regenerated");
-      } else {
-        toast.error(data.message || "Failed to regenerate response");
-      }
+      // Use streaming for regeneration
+      await handleStreamingResponse(
+        selectedChat._id,
+        userMessage.content,
+        userMessage.files || []
+      );
     } catch (error) {
       console.error("Error regenerating response:", error);
       toast.error("Failed to regenerate response");
@@ -195,7 +262,7 @@ export default function Home() {
             />
             <Image src={ChatIcon} className="opacity-70" alt="" />
           </div>
-          {messages.length === 0 ? (
+          {messages.length === 0 && !isStreaming ? (
             <>
               <div className="flex items-center gap-3">
                 <p className="text-3xl mb-4 font-medium">{message}</p>
@@ -222,7 +289,34 @@ export default function Home() {
                   onRegenerateResponse={handleRegenerateResponse}
                 />
               ))}
-              {isLoading && (
+
+              {/* Streaming message display */}
+              {isStreaming && streamingMessage && (
+                <div className="flex flex-col items-center text-sm w-full max-w-3xl">
+                  <div className="flex flex-col w-full mb-8">
+                    <div className="group flex flex-col max-w-2xl py-3 px-5 rounded-xl bg-transparent gap-3">
+                      <div className="flex gap-3">
+                        <Image
+                          src={assets.logo_icon}
+                          alt=""
+                          className="h-9 w-9 border p-1 border-white/15 rounded-full"
+                        />
+                        <div className="space-y-4 w-full overflow-scroll">
+                          <div className="space-y-4 w-full overflow-scroll">
+                            <div className="text-white/90">
+                              {streamingMessage}
+                              <span className="animate-pulse">|</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Loading indicator */}
+              {isLoading && !isStreaming && (
                 <div className="flex gap-4 max-w-3xl w-full py-3">
                   <Image
                     src={assets.logo_icon}
@@ -243,6 +337,8 @@ export default function Home() {
             isLoading={isLoading}
             editingMessage={editingMessage}
             setEditingMessage={setEditingMessage}
+            onStreamingResponse={handleStreamingResponse}
+            isStreaming={isStreaming}
           />
           <p className="text-xs absolute bottom-1 text-white">
             ChatGPT can make mistakes. Check important info.{" "}
