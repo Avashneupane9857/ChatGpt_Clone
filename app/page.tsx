@@ -1,4 +1,3 @@
-// 1. Update your Home component (main changes)
 "use client";
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
@@ -78,7 +77,6 @@ export default function Home() {
     console.log("Selected Chat:", selectedChat);
   }, [loadingChats, selectedChat]);
 
-  // New streaming function
   const onStreamingResponse = async (
     chatId: string,
     prompt: string,
@@ -290,7 +288,6 @@ export default function Home() {
                 />
               ))}
 
-              {/* Streaming message display */}
               {isStreaming && streamingMessage && (
                 <div className="flex flex-col items-center text-sm w-full max-w-3xl">
                   <div className="flex flex-col w-full mb-8">
@@ -315,7 +312,6 @@ export default function Home() {
                 </div>
               )}
 
-              {/* Loading indicator */}
               {isLoading && !isStreaming && (
                 <div className="flex gap-4 max-w-3xl w-full py-3">
                   <Image

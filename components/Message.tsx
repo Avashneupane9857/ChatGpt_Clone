@@ -148,47 +148,58 @@ export const Message = ({
           }`}
         >
           {role === "user" ? (
-            <div className="text-white/90">
-              {files && files.length > 0 && (
-                <div className="mb-3">
-                  {files.map((file, index) => (
-                    <div key={index}>{renderFilePreview(file)}</div>
-                  ))}
-                </div>
-              )}
+            <>
+              <div className="text-white/90">
+                {files && files.length > 0 && (
+                  <div className="mb-3">
+                    {files.map((file, index) => (
+                      <div key={index}>{renderFilePreview(file)}</div>
+                    ))}
+                  </div>
+                )}
 
-              {content && <span>{content}</span>}
-            </div>
+                {content && <span>{content}</span>}
+              </div>
+
+              {/* Action buttons below content for user */}
+              <div className="flex gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <Image
+                  onClick={copyMessage}
+                  src={assets.copy_icon}
+                  alt="Copy"
+                  className="w-4 cursor-pointer hover:opacity-70"
+                  title="Copy message"
+                />
+                <Image
+                  onClick={handleEditClick}
+                  src={assets.pencil_icon}
+                  alt="Edit"
+                  className="w-4 cursor-pointer hover:opacity-70"
+                  title="Edit message"
+                />
+              </div>
+            </>
           ) : (
-            <div className="flex gap-3">
-              <div className="space-y-4 w-full overflow-scroll">
+            <>
+              <div className="flex gap-3">
                 <div className="space-y-4 w-full overflow-scroll">
-                  <Markdown>
-                    {typeof content === "string" ? content : String(content)}
-                  </Markdown>
+                  <div className="space-y-4 w-full overflow-scroll">
+                    <Markdown>
+                      {typeof content === "string" ? content : String(content)}
+                    </Markdown>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
 
-          <div className="flex gap-3 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-            <Image
-              onClick={copyMessage}
-              src={assets.copy_icon}
-              alt="Copy"
-              className="w-4 cursor-pointer hover:opacity-70"
-              title="Copy message"
-            />
-            {role === "user" ? (
-              <Image
-                onClick={handleEditClick}
-                src={assets.pencil_icon}
-                alt="Edit"
-                className="w-4 cursor-pointer hover:opacity-70"
-                title="Edit message"
-              />
-            ) : (
-              <>
+              {/* Action buttons below content for assistant */}
+              <div className="flex gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <Image
+                  onClick={copyMessage}
+                  src={assets.copy_icon}
+                  alt="Copy"
+                  className="w-4 cursor-pointer hover:opacity-70"
+                  title="Copy message"
+                />
                 <Image
                   onClick={handleRegenerateClick}
                   src={assets.regenerate_icon}
@@ -208,9 +219,9 @@ export const Message = ({
                   className="w-4 cursor-pointer hover:opacity-70"
                   title="Dislike response"
                 />
-              </>
-            )}
-          </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
