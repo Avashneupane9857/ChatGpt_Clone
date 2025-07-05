@@ -110,7 +110,6 @@ export const PromptBox = ({
         let content = "";
 
         if (file.type.startsWith("image/")) {
-          // For images, convert to base64
           const reader = new FileReader();
           content = await new Promise<string>((resolve, reject) => {
             reader.onload = () => resolve(reader.result as string);
@@ -118,7 +117,6 @@ export const PromptBox = ({
             reader.readAsDataURL(file);
           });
         } else {
-          // For text-based files, read as text
           const reader = new FileReader();
           content = await new Promise<string>((resolve, reject) => {
             reader.onload = () => resolve(reader.result as string);
@@ -168,23 +166,23 @@ export const PromptBox = ({
               fill
               className="object-cover"
               sizes="120px"
-              unoptimized // Add this for base64 images
+              unoptimized
             />
-            {/* Overlay with file name */}
+
             <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all duration-200 flex items-end">
               <div className="p-2 text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200 truncate w-full">
                 {file.name}
               </div>
             </div>
           </div>
-          {/* Remove button */}
+
           <button
             onClick={() => removeFile(index)}
             className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold transition-colors z-10"
           >
             ×
           </button>
-          {/* File size indicator */}
+
           <div className="absolute top-1 left-1 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded">
             {formatFileSize(file.size)}
           </div>
@@ -452,7 +450,6 @@ export const PromptBox = ({
 
   return (
     <div className="w-full max-w-3xl">
-      {/* Fixed File Upload Preview Area - ChatGPT Style */}
       {uploadedFiles.length > 0 && (
         <div className="mb-3 p-3 bg-[#2f2f2f] rounded-2xl border border-gray-600">
           <div className="flex items-center gap-2 mb-3">
@@ -461,7 +458,6 @@ export const PromptBox = ({
             </span>
           </div>
 
-          {/* Compact horizontal layout for images like ChatGPT */}
           <div className="flex flex-wrap gap-2">
             {uploadedFiles.map((file, index) => (
               <div key={index}>{renderFilePreview(file, index)}</div>
@@ -498,18 +494,8 @@ export const PromptBox = ({
           rows={2}
           placeholder={editingMessage ? "Edit your message..." : "Ask Anything"}
         />
-        <div className="flex items-center justify-between text-sm mt-3">
-          <div className="flex items-center gap-2">
-            <p className="flex items-center gap-2 text-xs border border-gray-300/40 py-1 p-2 rounded-full cursor-pointer hover:bg-gray-500/20 transition text-white/80">
-              <Image src={assets.deepthink_icon} alt="" />
-              ChatGpt
-            </p>
-            <p className="flex items-center gap-2 text-xs border border-gray-300/40 px-2 py-1 rounded-full cursor-pointer hover:bg-gray-500/20 transition text-white/80">
-              <Image src={assets.search_icon} alt="" />
-              Search
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between h-1 text-sm mt-3 pb-4">
+          <div className="flex items-center gap-2 justify-between w-full">
             <input
               ref={fileInputRef}
               type="file"
@@ -524,7 +510,9 @@ export const PromptBox = ({
               className="flex items-center gap-1 text-xs cursor-pointer hover:text-slate-300 transition text-white/80"
               title="Attach files"
             >
-              <span className="text-2xl">📎</span>
+              <span className="text-3xl font-light hover:text-slate-400">
+                +
+              </span>
             </button>
 
             {editingMessage && (

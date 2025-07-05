@@ -17,7 +17,7 @@ interface MessageType {
   role: string;
   content: string;
   timestamp: number;
-  files?: [];
+  files?: unknown[];
 }
 
 export default function Home() {
