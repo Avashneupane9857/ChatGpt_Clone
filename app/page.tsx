@@ -52,6 +52,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState<string>("");
   const [isStreaming, setIsStreaming] = useState(false);
+  const [showPreAnimation, setShowPreAnimation] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -70,7 +71,7 @@ export default function Home() {
         behavior: "smooth",
       });
     }
-  }, [messages, streamingMessage]);
+  }, [messages, streamingMessage, showPreAnimation]);
 
   useEffect(() => {
     console.log("Loading:", loadingChats);
@@ -84,7 +85,7 @@ export default function Home() {
   ) => {
     try {
       setIsLoading(true);
-      setIsStreaming(true);
+      setShowPreAnimation(true);
       setStreamingMessage("");
 
       const response = await fetch("/api/chat/ai", {
@@ -130,6 +131,11 @@ export default function Home() {
               }
 
               if (data.content) {
+                // Hide pre-animation and start streaming when first content arrives
+                if (showPreAnimation) {
+                  setShowPreAnimation(false);
+                  setIsStreaming(true);
+                }
                 fullContent += data.content;
                 setStreamingMessage(fullContent);
               }
@@ -163,6 +169,7 @@ export default function Home() {
 
                 setStreamingMessage("");
                 setIsStreaming(false);
+                setShowPreAnimation(false); // Ensure pre-animation is hidden
 
                 return;
               }
@@ -177,6 +184,7 @@ export default function Home() {
       toast.error("Failed to get response");
       setStreamingMessage("");
       setIsStreaming(false);
+      setShowPreAnimation(false);
     } finally {
       setIsLoading(false);
     }
@@ -260,7 +268,7 @@ export default function Home() {
             />
             <Image src={ChatIcon} className="opacity-70" alt="" />
           </div>
-          {messages.length === 0 && !isStreaming ? (
+          {messages.length === 0 && !isStreaming && !showPreAnimation ? (
             <>
               <div className="flex items-center gap-3">
                 <p className="text-3xl mb-4 font-medium">{message}</p>
@@ -288,6 +296,39 @@ export default function Home() {
                 />
               ))}
 
+              {/* Pre-animation - ChatGPT-like thinking animation */}
+              {showPreAnimation && (
+                <div className="flex flex-col items-center text-sm w-full max-w-3xl">
+                  <div className="flex flex-col w-full mb-8">
+                    <div className="group flex flex-col max-w-2xl py-3 px-5 rounded-xl bg-transparent gap-3">
+                      <div className="flex gap-3">
+                        <Image
+                          src={assets.logo_icon}
+                          alt=""
+                          className="h-9 w-9 border p-1 border-white/15 rounded-full"
+                        />
+                        <div className="space-y-4 w-full overflow-scroll">
+                          <div className="flex items-center gap-1">
+                            <div className="typing-animation mt-3">
+                              <div className="dot animate-bounce"></div>
+                              <div
+                                className="dot animate-bounce"
+                                style={{ animationDelay: "0.2s" }}
+                              ></div>
+                              <div
+                                className="dot animate-bounce"
+                                style={{ animationDelay: "0.4s" }}
+                              ></div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Streaming response */}
               {isStreaming && streamingMessage && (
                 <div className="flex flex-col items-center text-sm w-full max-w-3xl">
                   <div className="flex flex-col w-full mb-8">
@@ -312,7 +353,8 @@ export default function Home() {
                 </div>
               )}
 
-              {isLoading && !isStreaming && (
+              {/* Legacy loading animation (kept as fallback) */}
+              {isLoading && !isStreaming && !showPreAnimation && (
                 <div className="flex gap-4 max-w-3xl w-full py-3">
                   <Image
                     src={assets.logo_icon}
@@ -341,6 +383,33 @@ export default function Home() {
           </p>
         </div>
       </div>
+
+      <style jsx>{`
+        .typing-animation {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+
+        .dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background-color: rgba(255, 255, 255, 0.6);
+          animation: bounce 1.4s infinite ease-in-out;
+        }
+
+        @keyframes bounce {
+          0%,
+          80%,
+          100% {
+            transform: scale(0);
+          }
+          40% {
+            transform: scale(1);
+          }
+        }
+      `}</style>
     </div>
   );
 }

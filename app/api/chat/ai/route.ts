@@ -10,7 +10,7 @@ import MemoryClient from 'mem0ai';
 
 // Initialize Mem0 client
 const memoryClient = new MemoryClient({ 
-  apiKey: process.env.MEM0AI_KEY 
+  apiKey: process.env.MEM0AI_KEY || ""
 });
 
 interface UploadedFile {
