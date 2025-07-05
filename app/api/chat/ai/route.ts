@@ -6,6 +6,12 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/config/db";
 import Chat from "@/models/Chat";
 import { uploadToCloudinary } from "../../../../config/cloudinary";
+import MemoryClient from 'mem0ai';
+
+// Initialize Mem0 client
+const memoryClient = new MemoryClient({ 
+  apiKey: process.env.MEM0AI_KEY 
+});
 
 interface UploadedFile {
   name: string;
@@ -15,6 +21,53 @@ interface UploadedFile {
   cloudinaryUrl?: string;
   cloudinaryPublicId?: string;
 }
+
+// Function to add memories to Mem0
+const addMemories = async (messages: any[], userId: string) => {
+  try {
+    // Format messages for Mem0
+    const memoryMessages = messages.map(msg => ({
+      role: msg.role,
+      content: msg.content
+    }));
+    
+    const result = await memoryClient.add(memoryMessages, { user_id: userId });
+    console.log('Memory added:', result);
+    return result;
+  } catch (error) {
+    console.error('Error adding memories:', error);
+    throw error;
+  }
+};
+
+// Function to search memories from Mem0
+const searchMemories = async (query: string, userId: string) => {
+  try {
+    const results = await memoryClient.search(query, { user_id: userId });
+    console.log('Memory search results:', results);
+    return results;
+  } catch (error) {
+    console.error('Error searching memories:', error);
+    return [];
+  }
+};
+
+// Function to get relevant memories and create context
+const getMemoryContext = async (prompt: string, userId: string) => {
+  try {
+    const memories = await searchMemories(prompt, userId);
+    
+    if (memories && memories.length > 0) {
+      const memoryContext = memories.map(memory => memory.text || memory.content).join('\n');
+      return `Based on our previous conversations, here's what I remember about you:\n${memoryContext}\n\nNow, regarding your current question:\n`;
+    }
+    
+    return '';
+  } catch (error) {
+    console.error('Error getting memory context:', error);
+    return '';
+  }
+};
 
 // Function to upload files to Cloudinary
 const uploadFilesToCloudinary = async (files: UploadedFile[]) => {
@@ -131,6 +184,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Get memory context for the user's prompt
+    const memoryContext = await getMemoryContext(prompt, userId);
+
     // Create user message with files
     let userContent = prompt;
     if (uploadedFiles.length > 0) {
@@ -162,8 +218,24 @@ export async function POST(req: NextRequest) {
       chat.messages.push(userPrompt);
     }
 
-    // Prepare messages for Vercel AI SDK
+    // Prepare messages for Vercel AI SDK with memory context
     const conversationMessages = createMessagesWithFiles(chat.messages);
+    
+    // Add memory context to the latest user message if available
+    if (memoryContext && conversationMessages.length > 0) {
+      const lastMessage = conversationMessages[conversationMessages.length - 1];
+      if (lastMessage.role === 'user') {
+        if (typeof lastMessage.content === 'string') {
+          lastMessage.content = memoryContext + lastMessage.content;
+        } else if (Array.isArray(lastMessage.content)) {
+          // Find the text content and prepend memory context
+          const textContent = lastMessage.content.find(c => c.type === 'text');
+          if (textContent) {
+            textContent.text = memoryContext + textContent.text;
+          }
+        }
+      }
+    }
 
     // Check if we have images to use GPT-4 Vision
     const hasImages = uploadedFiles.some((file: UploadedFile) => file.type.startsWith('image/'));
@@ -203,6 +275,14 @@ export async function POST(req: NextRequest) {
             
             chat.messages.push(message);
             await chat.save();
+
+            // Add the conversation to memory after completion
+            try {
+              await addMemories([userPrompt, message], userId);
+            } catch (memoryError) {
+              console.error('Failed to add memories:', memoryError);
+              // Don't fail the request if memory addition fails
+            }
             
             // Send final chunk
             const finalData = JSON.stringify({ 
@@ -249,6 +329,14 @@ export async function POST(req: NextRequest) {
 
       chat.messages.push(message);
       await chat.save();
+
+      // Add the conversation to memory
+      try {
+        await addMemories([userPrompt, message], userId);
+      } catch (memoryError) {
+        console.error('Failed to add memories:', memoryError);
+        // Don't fail the request if memory addition fails
+      }
 
       return NextResponse.json({ success: true, data: message });
     }
