@@ -1,6 +1,5 @@
 import { assets } from "@/assets/assets";
 import { useAppContext } from "@/context/AppContext";
-import axios from "axios";
 import Image from "next/image";
 import React, { useState, useEffect, useRef } from "react";
 import toast from "react-hot-toast";
@@ -15,16 +14,12 @@ interface PromptBoxProps {
   setEditingMessage?: (
     editing: { messageIndex: number; content: string } | null
   ) => void;
-}
-
-interface ApiResponse {
-  success: boolean;
-  data?: {
-    role: "user" | "assistant";
-    content: string;
-    timestamp: number;
-  };
-  message?: string;
+  onStreamingResponse: (
+    chatId: string,
+    prompt: string,
+    files: any[]
+  ) => Promise<void>;
+  isStreaming: boolean;
 }
 
 interface UploadedFile {
@@ -40,11 +35,13 @@ export const PromptBox = ({
   isLoading,
   editingMessage,
   setEditingMessage,
+  onStreamingResponse,
+  isStreaming,
 }: PromptBoxProps) => {
   const [prompt, setPrompt] = useState<string>("");
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { user, setChat, selectedChat, setSelectedChat } = useAppContext();
+  const { user, selectedChat, setSelectedChat } = useAppContext();
 
   useEffect(() => {
     if (editingMessage) {
@@ -58,7 +55,7 @@ export const PromptBox = ({
       if (editingMessage) {
         handleEditMessage(e);
       } else {
-        sendPrompt(e);
+        handleSubmit(e);
       }
     }
     if (e.key === "Escape" && editingMessage) {
@@ -230,221 +227,97 @@ export const PromptBox = ({
   ) => {
     if (!editingMessage || !setEditingMessage) return;
 
-    const promptCopy = prompt;
     try {
       e.preventDefault();
       if (!user) return toast.error("Login to send messages");
-      if (isLoading) return toast.error("Wait for some time");
+      if (isLoading || isStreaming) return toast.error("Wait for some time");
       if (!selectedChat) return toast.error("No chat selected");
       if (!prompt.trim() && uploadedFiles.length === 0)
         return toast.error("Message cannot be empty");
 
-      const currentChat = selectedChat;
       setIsLoading(true);
 
-      const messagesBeforeEdit = currentChat.messages.slice(
-        0,
-        editingMessage.messageIndex
-      );
-
-      const updatedUserMessage = {
-        role: "user" as const,
+      // Update the user message
+      const updatedMessages = [...selectedChat.messages];
+      updatedMessages[editingMessage.messageIndex] = {
+        ...updatedMessages[editingMessage.messageIndex],
         content: prompt,
-        timestamp: Date.now(),
-        files: uploadedFiles,
+        files: uploadedFiles || [],
       };
 
-      const updatedMessages = [...messagesBeforeEdit, updatedUserMessage];
-
-      setChat((prevChats) =>
-        prevChats.map((chatItem) =>
-          chatItem._id === currentChat._id
-            ? { ...chatItem, messages: updatedMessages }
-            : chatItem
-        )
+      // Remove messages after the edited one
+      const messagesUpToEdit = updatedMessages.slice(
+        0,
+        editingMessage.messageIndex + 1
       );
 
       setSelectedChat((prev) => {
         if (!prev) return null;
         return {
           ...prev,
-          messages: updatedMessages,
+          messages: messagesUpToEdit,
         };
       });
 
+      // Clear editing state
       setEditingMessage(null);
+      const currentPrompt = prompt;
+      const currentFiles = uploadedFiles;
       setPrompt("");
       setUploadedFiles([]);
 
-      const { data }: { data: ApiResponse } = await axios.post("/api/chat/ai", {
-        chatId: currentChat._id,
-        prompt,
-        files: uploadedFiles,
-        isEdit: true,
-        editIndex: editingMessage.messageIndex,
-      });
-
-      if (data.success) {
-        const message = data.data?.content || "No response received";
-        const messageTokens = message.split(" ");
-        const assistantMessage = {
-          role: "assistant" as const,
-          content: "",
-          timestamp: Date.now(),
-        };
-
-        setSelectedChat((prev) => {
-          if (!prev) return null;
-          return {
-            ...prev,
-            messages: [...prev.messages, assistantMessage],
-          };
-        });
-
-        for (let i = 0; i < messageTokens.length; i++) {
-          setTimeout(() => {
-            assistantMessage.content = messageTokens.slice(0, i + 1).join(" ");
-            setSelectedChat((prev) => {
-              if (!prev) return null;
-              const updatedMessages = [
-                ...prev.messages.slice(0, -1),
-                { ...assistantMessage },
-              ];
-              return { ...prev, messages: updatedMessages };
-            });
-          }, i * 100);
-        }
-
-        setChat((prevChats) =>
-          prevChats.map((chatItem) =>
-            chatItem._id === currentChat._id
-              ? { ...chatItem, messages: [...chatItem.messages, data.data!] }
-              : chatItem
-          )
-        );
-      } else {
-        toast.error(data.message || "An error occurred");
-        setPrompt(promptCopy);
-      }
-    } catch (error: unknown) {
-      if (error instanceof Error) {
-        toast.error(error.message);
-      } else if (typeof error === "string") {
-        toast.error(error);
-      } else {
-        toast.error("An error occurred");
-      }
-      setPrompt(promptCopy);
+      // Start streaming response for the edited message
+      await onStreamingResponse(selectedChat._id, currentPrompt, currentFiles);
+    } catch (error) {
+      console.error("Error editing message:", error);
+      toast.error("Failed to edit message");
     } finally {
       setIsLoading(false);
     }
   };
 
-  const sendPrompt = async (
+  const handleSubmit = async (
     e:
       | React.FormEvent<HTMLFormElement>
       | React.KeyboardEvent<HTMLTextAreaElement>
   ) => {
-    const promptCopy = prompt;
     try {
       e.preventDefault();
       if (!user) return toast.error("Login to send messages");
-      if (isLoading) return toast.error("Wait for some time");
+      if (isLoading || isStreaming) return toast.error("Wait for some time");
       if (!selectedChat) return toast.error("No chat selected");
       if (!prompt.trim() && uploadedFiles.length === 0)
         return toast.error("Message cannot be empty");
 
-      const currentChat = selectedChat;
-      setIsLoading(true);
-      setPrompt("");
-
-      const userPrompt = {
+      // Add user message to chat immediately
+      const userMessage = {
         role: "user" as const,
         content: prompt,
         timestamp: Date.now(),
-        files: uploadedFiles,
+        files: uploadedFiles || [],
       };
-
-      setChat((prevChats) =>
-        selectedChat
-          ? prevChats.map((chatItem) =>
-              chatItem._id === currentChat._id
-                ? { ...chatItem, messages: [...chatItem.messages, userPrompt] }
-                : chatItem
-            )
-          : prevChats
-      );
 
       setSelectedChat((prev) => {
         if (!prev) return null;
         return {
           ...prev,
-          messages: [...prev.messages, userPrompt],
+          messages: [...prev.messages, userMessage],
         };
       });
 
+      // Store current values before clearing
+      const currentPrompt = prompt;
+      const currentFiles = uploadedFiles;
+
+      // Clear form immediately
+      setPrompt("");
       setUploadedFiles([]);
 
-      const { data }: { data: ApiResponse } = await axios.post("/api/chat/ai", {
-        chatId: currentChat._id,
-        prompt,
-        files: uploadedFiles,
-      });
-
-      if (data.success) {
-        setChat((prevChats) =>
-          prevChats.map((chatItem) =>
-            chatItem._id === currentChat._id
-              ? { ...chatItem, messages: [...chatItem.messages, data.data!] }
-              : chatItem
-          )
-        );
-
-        const message = data.data?.content || "No response received";
-        const messageTokens = message.split(" ");
-        const assistantMessage = {
-          role: "assistant" as const,
-          content: "",
-          timestamp: Date.now(),
-        };
-
-        setSelectedChat((prev) =>
-          prev
-            ? {
-                ...prev,
-                messages: [...prev.messages, assistantMessage],
-              }
-            : null
-        );
-
-        for (let i = 0; i < messageTokens.length; i++) {
-          setTimeout(() => {
-            assistantMessage.content = messageTokens.slice(0, i + 1).join(" ");
-            setSelectedChat((prev) => {
-              if (!prev) return null;
-              const updatedMessages = [
-                ...prev.messages.slice(0, -1),
-                { ...assistantMessage },
-              ];
-              return { ...prev, messages: updatedMessages };
-            });
-          }, i * 100);
-        }
-      } else {
-        toast.error(data.message || "An error occurred");
-        setPrompt(promptCopy);
-      }
-    } catch (error: unknown) {
-      if (error instanceof Error) {
-        toast.error(error.message);
-      } else if (typeof error === "string") {
-        toast.error(error);
-      } else {
-        toast.error("An error occurred");
-      }
-      setPrompt(promptCopy);
-    } finally {
-      setIsLoading(false);
+      // Start streaming response
+      await onStreamingResponse(selectedChat._id, currentPrompt, currentFiles);
+    } catch (error) {
+      console.error("Error sending message:", error);
+      toast.error("Failed to send message");
     }
   };
 
@@ -467,7 +340,7 @@ export const PromptBox = ({
       )}
 
       <form
-        onSubmit={editingMessage ? handleEditMessage : sendPrompt}
+        onSubmit={editingMessage ? handleEditMessage : handleSubmit}
         className={`w-full bg-[#303030] p-4 rounded-3xl transition-all ${
           editingMessage ? "ring-2 ring-blue-500" : ""
         }`}
@@ -527,7 +400,9 @@ export const PromptBox = ({
             <button
               type="submit"
               disabled={
-                (!prompt.trim() && uploadedFiles.length === 0) || isLoading
+                (!prompt.trim() && uploadedFiles.length === 0) ||
+                isLoading ||
+                isStreaming
               }
               className={`${
                 prompt.trim() || uploadedFiles.length > 0

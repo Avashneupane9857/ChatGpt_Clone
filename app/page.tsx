@@ -79,7 +79,7 @@ export default function Home() {
   }, [loadingChats, selectedChat]);
 
   // New streaming function
-  const handleStreamingResponse = async (
+  const onStreamingResponse = async (
     chatId: string,
     prompt: string,
     files: any[] = []
@@ -165,7 +165,7 @@ export default function Home() {
 
                 setStreamingMessage("");
                 setIsStreaming(false);
-                toast.success("Response received");
+
                 return;
               }
             } catch (parseError) {
@@ -215,7 +215,7 @@ export default function Home() {
       });
 
       // Use streaming for regeneration
-      await handleStreamingResponse(
+      await onStreamingResponse(
         selectedChat._id,
         userMessage.content,
         userMessage.files || []
@@ -337,7 +337,7 @@ export default function Home() {
             isLoading={isLoading}
             editingMessage={editingMessage}
             setEditingMessage={setEditingMessage}
-            onStreamingResponse={handleStreamingResponse}
+            onStreamingResponse={onStreamingResponse}
             isStreaming={isStreaming}
           />
           <p className="text-xs absolute bottom-1 text-white">
