@@ -7,7 +7,7 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// Upload file to Cloudinary
+
 export const uploadToCloudinary = async (
   fileBuffer: Buffer, 
   fileName: string, 
@@ -37,7 +37,7 @@ export const uploadToCloudinary = async (
   }
 };
 
-// Delete file from Cloudinary
+
 export const deleteFromCloudinary = async (publicId: string): Promise<any> => {
   try {
     const result = await cloudinary.uploader.destroy(publicId);
@@ -48,7 +48,7 @@ export const deleteFromCloudinary = async (publicId: string): Promise<any> => {
   }
 };
 
-// Get optimized image URL
+
 export const getOptimizedImageUrl = (
   publicId: string, 
   width: number = 400, 

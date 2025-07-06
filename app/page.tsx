@@ -143,13 +143,10 @@ export default function Home() {
 
               if (data.content) {
                 streamingRef.current += data.content;
-
-                // Update the streaming message state immediately
                 setStreamingMessage(streamingRef.current);
               }
 
               if (data.done) {
-                // Streaming complete, update the chat
                 const finalMessage = data.message || {
                   role: "assistant",
                   content: streamingRef.current,
@@ -244,53 +241,81 @@ export default function Home() {
   };
 
   return (
-    <div>
-      <div className="flex h-screen">
-        <Sidebar expand={expand} setExpand={setExpand} />
-        <div className="flex-1 flex flex-col items-center justify-center px-4 pb-8 bg-[#212121] text-white relative">
-          <button className="hover:bg-[#3E3F4B] absolute top-4 left-4 text-white px-4 py-2 rounded-md flex items-center gap-1">
+    <div className="flex h-screen">
+      <Sidebar expand={expand} setExpand={setExpand} />
+
+      <div className="flex-1 flex flex-col bg-[#212121] text-white relative">
+        {/* Mobile Header */}
+        <div className="md:hidden flex items-center justify-between p-4 border-b border-gray-700">
+          <button
+            onClick={() => setExpand(!expand)}
+            className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+          >
+            <Image src={menuIcon} className="w-6 h-6" alt="Menu" />
+          </button>
+
+          <h1 className="text-lg font-semibold truncate mx-4">
+            {selectedChat?.name || "New Chat"}
+          </h1>
+
+          <div className="flex-shrink-0">
+            {user ? (
+              <UserButton />
+            ) : (
+              <button
+                onClick={openSignIn}
+                className="p-1 hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                <Image
+                  src={assets.profile_icon}
+                  className="w-8 h-8"
+                  alt="Profile"
+                />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Desktop Header */}
+        <div className="hidden md:flex items-center justify-between p-4">
+          <button className="hover:bg-[#3E3F4B] text-white px-4 py-2 rounded-md flex items-center gap-1 transition-colors">
             ChatGPT
           </button>
-          <div className="absolute top-2 right-2">
-            <div
-              onClick={() => (user ? null : openSignIn())}
-              className={`flex items-center ${
-                expand
-                  ? "hover:bg-white/10 rounded-lg "
-                  : "justify-center w-full"
-              }gap-3 text-white/60 text-sm p-2 mt-2 cursor-pointer`}
-            >
-              {user ? (
-                <UserButton />
-              ) : (
-                <Image src={assets.profile_icon} className="w-7" alt="" />
-              )}
-            </div>
-          </div>
 
-          <div className="md:hidden absolute px-4 top-6 flex items-center justify-between w-full">
-            <Image
-              onClick={() => (expand ? setExpand(false) : setExpand(true))}
-              src={menuIcon}
-              className="rotate-180 "
-              alt=""
-            />
-            <Image src={ChatIcon} className="opacity-70" alt="" />
+          <div className="flex items-center">
+            {user ? (
+              <UserButton />
+            ) : (
+              <button
+                onClick={openSignIn}
+                className="flex items-center gap-3 text-white/60 text-sm p-2 hover:bg-white/10 rounded-lg transition-colors"
+              >
+                <Image
+                  src={assets.profile_icon}
+                  className="w-7 h-7"
+                  alt="Profile"
+                />
+              </button>
+            )}
           </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="flex-1 flex flex-col items-center justify-center px-4 pb-8 relative overflow-hidden">
           {messages.length === 0 && !isStreaming && !showPreAnimation ? (
-            <>
-              <div className="flex items-center gap-3">
-                <p className="text-3xl mb-4 font-medium">{message}</p>
-              </div>
-            </>
+            <div className="flex items-center gap-3 text-center">
+              <p className="text-2xl md:text-3xl mb-4 font-medium">{message}</p>
+            </div>
           ) : (
             <div
               ref={containerRef}
-              className="relative flex flex-col items-center justify-start w-full mt-20 max-h-screen overflow-y-auto"
+              className="relative flex flex-col items-center justify-start w-full h-full overflow-y-auto pt-4"
             >
-              <p className="fixed top-8 border-transparent hover:border-gray-500/50 py-1 px-2 rounded-lg font-semibold mb-6">
+              {/* Chat Title - Desktop Only */}
+              <p className="hidden md:block sticky top-0 bg-[#212121] border-transparent hover:border-gray-500/50 py-2 px-4 rounded-lg font-semibold mb-6 z-10">
                 {selectedChat?.name || "Untitled Chat"}
               </p>
+
               {selectedChat?.messages?.map((message, index) => (
                 <MessageComponent
                   key={index}
@@ -302,7 +327,7 @@ export default function Home() {
                     setEditingMessage({ messageIndex, content });
                   }}
                   onRegenerateResponse={handleRegenerateResponse}
-                  isStreaming={false} // These are completed messages
+                  isStreaming={false}
                 />
               ))}
 
@@ -314,9 +339,9 @@ export default function Home() {
                         <Image
                           src={assets.logo_icon}
                           alt=""
-                          className="h-9 w-9 border p-1 border-white/15 rounded-full"
+                          className="h-9 w-9 border p-1 border-white/15 rounded-full flex-shrink-0"
                         />
-                        <div className="space-y-4 w-full overflow-scroll">
+                        <div className="space-y-4 w-full">
                           <div className="flex items-center gap-1">
                             <div className="typing-animation mt-3">
                               <div className="dot animate-bounce"></div>
@@ -353,7 +378,7 @@ export default function Home() {
                   <Image
                     src={assets.logo_icon}
                     alt=""
-                    className="h-9 w-9 border p-1 border-white/15 rounded-full "
+                    className="h-9 w-9 border p-1 border-white/15 rounded-full flex-shrink-0"
                   />
                   <div className="loader flex justify-center items-center gap-1">
                     <div className="w-1 h-1 rounded-full bg-white animate-bounce"></div>
@@ -364,19 +389,33 @@ export default function Home() {
               )}
             </div>
           )}
-          <PromptBox
-            setIsLoading={setIsLoading}
-            isLoading={isLoading}
-            editingMessage={editingMessage}
-            setEditingMessage={setEditingMessage}
-            onStreamingResponse={onStreamingResponse}
-            isStreaming={isStreaming}
-          />
-          <p className="text-xs absolute bottom-1 text-white">
-            ChatGPT can make mistakes. Check important info.{" "}
+
+          {/* PromptBox */}
+          <div className="w-full max-w-4xl mx-auto">
+            <PromptBox
+              setIsLoading={setIsLoading}
+              isLoading={isLoading}
+              editingMessage={editingMessage}
+              setEditingMessage={setEditingMessage}
+              onStreamingResponse={onStreamingResponse}
+              isStreaming={isStreaming}
+            />
+          </div>
+
+          {/* Footer */}
+          <p className="text-xs text-white/60 mt-2 text-center px-4">
+            ChatGPT can make mistakes. Check important info.
           </p>
         </div>
       </div>
+
+      {/* Mobile Sidebar Overlay */}
+      {expand && (
+        <div
+          className="md:hidden fixed inset-0 bg-black/50 z-40"
+          onClick={() => setExpand(false)}
+        />
+      )}
 
       <style jsx>{`
         .typing-animation {
@@ -402,6 +441,24 @@ export default function Home() {
           40% {
             transform: scale(1);
           }
+        }
+
+        /* Hide scrollbar but keep functionality */
+        .overflow-y-auto::-webkit-scrollbar {
+          width: 6px;
+        }
+
+        .overflow-y-auto::-webkit-scrollbar-track {
+          background: transparent;
+        }
+
+        .overflow-y-auto::-webkit-scrollbar-thumb {
+          background: rgba(255, 255, 255, 0.2);
+          border-radius: 3px;
+        }
+
+        .overflow-y-auto::-webkit-scrollbar-thumb:hover {
+          background: rgba(255, 255, 255, 0.3);
         }
       `}</style>
     </div>

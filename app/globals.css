@@ -23,3 +23,47 @@ html{
   pre{
     border-radius: 10px !important;
   }
+
+
+
+
+  /* Add these styles to your Sidebar component or global CSS */
+
+/* Mobile Sidebar Styles */
+@media (max-width: 768px) {
+  .sidebar-mobile {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: 280px;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease-in-out;
+    z-index: 50;
+    background: #171717;
+    border-right: 1px solid #374151;
+  }
+
+  .sidebar-mobile.expanded {
+    transform: translateX(0);
+  }
+
+  .sidebar-desktop {
+    position: relative;
+    height: 100vh;
+    transition: width 0.3s ease-in-out;
+  }
+}
+
+/* Desktop Sidebar Styles */
+@media (min-width: 769px) {
+  .sidebar-mobile {
+    display: none;
+  }
+  
+  .sidebar-desktop {
+    position: relative;
+    height: 100vh;
+    transition: width 0.3s ease-in-out;
+  }
+}

@@ -14,6 +14,9 @@ importers:
       '@clerk/nextjs':
         specifier: ^6.23.2
         version: 6.23.3(next@15.3.4(@opentelemetry/api@1.9.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@clerk/types':
+        specifier: ^4.63.0
+        version: 4.63.0
       ai:
         specifier: ^4.3.16
         version: 4.3.16(react@19.1.0)(zod@3.25.74)
