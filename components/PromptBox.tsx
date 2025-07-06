@@ -1,5 +1,6 @@
 import { assets } from "@/assets/assets";
 import { useAppContext } from "@/context/AppContext";
+import { useClerk } from "@clerk/nextjs";
 import Image from "next/image";
 import React, { useState, useEffect, useRef } from "react";
 import toast from "react-hot-toast";
@@ -49,6 +50,7 @@ export const PromptBox = ({
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { user, selectedChat, setSelectedChat } = useAppContext();
+  const { openSignIn } = useClerk();
 
   useEffect(() => {
     if (editingMessage) {
@@ -236,7 +238,7 @@ export const PromptBox = ({
 
     try {
       e.preventDefault();
-      if (!user) return toast.error("Login to send messages");
+
       if (isLoading || isStreaming) return toast.error("Wait for some time");
       if (!selectedChat) return toast.error("No chat selected");
       if (!prompt.trim() && uploadedFiles.length === 0)
@@ -292,7 +294,13 @@ export const PromptBox = ({
   ) => {
     try {
       e.preventDefault();
-      if (!user) return toast.error("Login to send messages");
+
+      // Open Clerk sign-in modal if user is not authenticated
+      if (!user) {
+        openSignIn();
+        return;
+      }
+
       if (isLoading || isStreaming) return toast.error("Wait for some time");
       if (!selectedChat) return toast.error("No chat selected");
       if (!prompt.trim() && uploadedFiles.length === 0)
@@ -318,11 +326,9 @@ export const PromptBox = ({
       const currentPrompt = prompt;
       const currentFiles = uploadedFiles;
 
-      // Clear form immediately
       setPrompt("");
       setUploadedFiles([]);
 
-      // Start streaming response
       await onStreamingResponse(selectedChat._id, currentPrompt, currentFiles);
     } catch (error) {
       console.error("Error sending message:", error);
@@ -331,7 +337,7 @@ export const PromptBox = ({
   };
 
   return (
-    <div className="w-full max-w-3xl">
+    <div className="w-full max-w-4xl">
       {uploadedFiles.length > 0 && (
         <div className="mb-3 p-3 bg-[#2f2f2f] rounded-2xl border border-gray-600">
           <div className="flex items-center gap-2 mb-3">

@@ -386,7 +386,6 @@ export default function Home() {
             </div>
           )}
 
-          {/* PromptBox */}
           <div className="w-full max-w-4xl mx-auto">
             <PromptBox
               setIsLoading={setIsLoading}
@@ -398,14 +397,12 @@ export default function Home() {
             />
           </div>
 
-       
           <p className="text-xs text-white/60 mt-2 text-center px-4">
             ChatGPT can make mistakes. Check important info.
           </p>
         </div>
       </div>
 
-  
       {expand && (
         <div
           className="md:hidden fixed inset-0 bg-black/50 z-40"
