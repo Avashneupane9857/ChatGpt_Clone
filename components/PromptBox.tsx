@@ -4,6 +4,21 @@ import Image from "next/image";
 import React, { useState, useEffect, useRef } from "react";
 import toast from "react-hot-toast";
 
+interface UploadedFile {
+  name: string;
+  type: string;
+  size: number;
+  content: string;
+  url?: string;
+}
+
+interface Message {
+  role: "user" | "assistant";
+  content: string;
+  timestamp: number;
+  files?: UploadedFile[];
+}
+
 interface PromptBoxProps {
   setIsLoading: (loading: boolean) => void;
   isLoading: boolean;
@@ -17,17 +32,9 @@ interface PromptBoxProps {
   onStreamingResponse: (
     chatId: string,
     prompt: string,
-    files: any[]
+    files: UploadedFile[]
   ) => Promise<void>;
   isStreaming: boolean;
-}
-
-interface UploadedFile {
-  name: string;
-  type: string;
-  size: number;
-  content: string;
-  url?: string;
 }
 
 export const PromptBox = ({
@@ -239,11 +246,13 @@ export const PromptBox = ({
 
       // Update the user message
       const updatedMessages = [...selectedChat.messages];
+      const messageToUpdate = updatedMessages[editingMessage.messageIndex];
+
       updatedMessages[editingMessage.messageIndex] = {
-        ...updatedMessages[editingMessage.messageIndex],
+        ...messageToUpdate,
         content: prompt,
         files: uploadedFiles || [],
-      };
+      } as Message;
 
       // Remove messages after the edited one
       const messagesUpToEdit = updatedMessages.slice(
@@ -290,8 +299,8 @@ export const PromptBox = ({
         return toast.error("Message cannot be empty");
 
       // Add user message to chat immediately
-      const userMessage = {
-        role: "user" as const,
+      const userMessage: Message = {
+        role: "user",
         content: prompt,
         timestamp: Date.now(),
         files: uploadedFiles || [],

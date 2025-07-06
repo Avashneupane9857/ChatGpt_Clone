@@ -6,18 +6,26 @@ import ChatIcon from "../assets/chat_icon.svg";
 
 import { Sidebar } from "@/components/Sidebar";
 import { PromptBox } from "@/components/PromptBox";
-import { Message } from "@/components/Message";
+import { Message as MessageComponent } from "@/components/Message";
 import { useAppContext } from "@/context/AppContext";
 import { assets } from "@/assets/assets";
 import { useClerk, UserButton } from "@clerk/nextjs";
 
 import toast from "react-hot-toast";
 
+interface UploadedFile {
+  name: string;
+  type: string;
+  size: number;
+  content: string;
+  url?: string;
+}
+
 interface MessageType {
-  role: string;
+  role: "user" | "assistant";
   content: string;
   timestamp: number;
-  files?: unknown[];
+  files?: UploadedFile[];
 }
 
 export default function Home() {
@@ -81,7 +89,7 @@ export default function Home() {
   const onStreamingResponse = async (
     chatId: string,
     prompt: string,
-    files: any[] = []
+    files?: UploadedFile[]
   ) => {
     try {
       setIsLoading(true);
@@ -283,7 +291,7 @@ export default function Home() {
                 {selectedChat?.name || "Untitled Chat"}
               </p>
               {selectedChat?.messages?.map((message, index) => (
-                <Message
+                <MessageComponent
                   key={index}
                   role={message.role}
                   content={message.content}

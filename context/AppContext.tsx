@@ -11,13 +11,22 @@ import {
 } from "react";
 import toast from "react-hot-toast";
 
+interface UploadedFile {
+  name: string;
+  type: string;
+  size: number;
+  content: string;
+  url?: string;
+}
+
 interface Chat {
   _id: string;
   name: string;
   messages: {
-    role: "user" | "assistant"; // ✅ Fixed: constrained to specific values
+    role: "user" | "assistant";
     content: string;
     timestamp: number;
+    files?: UploadedFile[]; // Added this line
   }[];
   userId: string;
   createdAt: string;

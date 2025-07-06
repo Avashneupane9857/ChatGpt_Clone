@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export const maxDuration = 60;
 import { openai } from '@ai-sdk/openai';
 import { streamText, generateText } from 'ai';
@@ -8,7 +9,7 @@ import Chat from "@/models/Chat";
 import { uploadToCloudinary } from "../../../../config/cloudinary";
 import MemoryClient from 'mem0ai';
 
-// Initialize Mem0 client
+
 const memoryClient = new MemoryClient({ 
   apiKey: process.env.MEM0AI_KEY || ""
 });
@@ -22,13 +23,38 @@ interface UploadedFile {
   cloudinaryPublicId?: string;
 }
 
-// Function to add memories to Mem0
-const addMemories = async (messages: any[], userId: string) => {
+interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string | MessageContent[];
+  timestamp?: number;
+  files?: UploadedFile[];
+}
+
+interface MessageContent {
+  type: string;
+  text?: string;
+  image?: string;
+  
+}
+
+interface Memory {
+  id?: string;
+  text?: string;
+  content?: string;
+  score?: number;
+
+}
+
+
+const addMemories = async (messages: ChatMessage[], userId: string) => {
   try {
-    // Format messages for Mem0
+
     const memoryMessages = messages.map(msg => ({
       role: msg.role,
-      content: msg.content
+      content: typeof msg.content === 'string' ? msg.content : 
+               Array.isArray(msg.content) ? 
+               msg.content.map(c => c.text || c.type).join(' ') : 
+               String(msg.content)
     }));
     
     const result = await memoryClient.add(memoryMessages, { user_id: userId });
@@ -41,11 +67,11 @@ const addMemories = async (messages: any[], userId: string) => {
 };
 
 // Function to search memories from Mem0
-const searchMemories = async (query: string, userId: string) => {
+const searchMemories = async (query: string, userId: string): Promise<Memory[]> => {
   try {
     const results = await memoryClient.search(query, { user_id: userId });
     console.log('Memory search results:', results);
-    return results;
+    return Array.isArray(results) ? results : [];
   } catch (error) {
     console.error('Error searching memories:', error);
     return [];
@@ -58,8 +84,11 @@ const getMemoryContext = async (prompt: string, userId: string) => {
     const memories = await searchMemories(prompt, userId);
     
     if (memories && memories.length > 0) {
-      const memoryContext = memories.map(memory => memory.text || memory.content).join('\n');
-      return `Based on our previous conversations, here's what I remember about you:\n${memoryContext}\n\nNow, regarding your current question:\n`;
+      const memoryContext = memories.map((memory: Memory) => 
+        memory.text || memory.content || ''
+      ).filter(Boolean).join('\n');
+      
+      return memoryContext ? `Based on our previous conversations, here's what I remember about you:\n${memoryContext}\n\nNow, regarding your current question:\n` : '';
     }
     
     return '';
@@ -116,11 +145,15 @@ const processFileContent = (file: UploadedFile): string => {
 };
 
 // Function to create messages with file support for Vercel AI SDK
-const createMessagesWithFiles = (messages: any[]) => {
+const createMessagesWithFiles = (messages: ChatMessage[]): any[] => {
   return messages.map(msg => {
     if (msg.role === 'user' && msg.files && msg.files.length > 0) {
-      let content = msg.content;
-      const messageContent = [];
+      let content = typeof msg.content === 'string' ? msg.content : 
+                   Array.isArray(msg.content) ? 
+                   msg.content.map(c => c.text || '').join(' ') : 
+                   String(msg.content);
+      
+      const messageContent: MessageContent[] = [];
       
       // Add text content
       messageContent.push({
@@ -150,7 +183,10 @@ const createMessagesWithFiles = (messages: any[]) => {
     
     return {
       role: msg.role,
-      content: msg.content
+      content: typeof msg.content === 'string' ? msg.content : 
+               Array.isArray(msg.content) ? 
+               msg.content.map(c => c.text || '').join(' ') : 
+               String(msg.content)
     };
   });
 };
@@ -177,6 +213,7 @@ export async function POST(req: NextRequest) {
       try {
         uploadedFiles = await uploadFilesToCloudinary(files);
       } catch (error) {
+        console.error('Error uploading files:', error);
         return NextResponse.json({ 
           success: false, 
           message: "Failed to upload files to Cloudinary" 
@@ -197,7 +234,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const userPrompt = {
+    const userPrompt: ChatMessage = {
       role: "user",
       content: userContent,
       timestamp: Date.now(),
@@ -205,6 +242,7 @@ export async function POST(req: NextRequest) {
         name: file.name,
         type: file.type,
         size: file.size,
+        content: file.content, 
         cloudinaryUrl: file.cloudinaryUrl,
         cloudinaryPublicId: file.cloudinaryPublicId,
         uploadedAt: new Date()
@@ -229,7 +267,7 @@ export async function POST(req: NextRequest) {
           lastMessage.content = memoryContext + lastMessage.content;
         } else if (Array.isArray(lastMessage.content)) {
           // Find the text content and prepend memory context
-          const textContent = lastMessage.content.find(c => c.type === 'text');
+          const textContent = lastMessage.content.find((c: any) => c.type === 'text');
           if (textContent) {
             textContent.text = memoryContext + textContent.text;
           }
@@ -267,7 +305,7 @@ export async function POST(req: NextRequest) {
             }
             
             // Save the complete message to database
-            const message = {
+            const message: ChatMessage = {
               role: "assistant",
               content: fullContent,
               timestamp: Date.now()
@@ -314,14 +352,14 @@ export async function POST(req: NextRequest) {
         },
       });
     } else {
-      // Non-streaming response using Vercel AI SDK
+
       const result = await generateText({
         model: openai(model),
         messages: conversationMessages,
         maxTokens: hasImages ? 1000 : undefined,
       });
 
-      const message = {
+      const message: ChatMessage = {
         role: "assistant",
         content: result.text,
         timestamp: Date.now()
