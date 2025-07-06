@@ -1,13 +1,23 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
- 
- images: {
-    domains: ['res.cloudinary.com'], // if using Cloudinary
-    // Allow data URLs for base64 images
+  webpack: (config) => {
+    config.resolve = {
+      ...config.resolve,
+      alias: {
+        ...(config.resolve?.alias || {}),
+        canvas: false,
+      },
+    };
+    return config;
+  },
+  serverExternalPackages: ['pdfjs-dist'], // ✅ NEW location
+  images: {
+    domains: ['res.cloudinary.com'],
     dangerouslyAllowSVG: true,
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
-  }, eslint: {
+  },
+  eslint: {
     ignoreDuringBuilds: true,
   },
 };

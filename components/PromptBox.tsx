@@ -92,11 +92,17 @@ export const PromptBox = ({
       "image/webp",
       "application/pdf",
       "text/plain",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
+      "application/msword", // .doc
       "text/csv",
-      "application/vnd.ms-excel",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.ms-excel", // .xls
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
+      "application/vnd.ms-powerpoint", // .ppt
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation", // .pptx
+      "application/rtf", // .rtf
+      "application/json", // .json
+      "text/xml", // .xml
+      "application/xml", // .xml
     ];
 
     const processedFiles: UploadedFile[] = [];
@@ -116,6 +122,7 @@ export const PromptBox = ({
         let content = "";
 
         if (file.type.startsWith("image/")) {
+          // For images, read as data URL
           const reader = new FileReader();
           content = await new Promise<string>((resolve, reject) => {
             reader.onload = () => resolve(reader.result as string);
@@ -123,12 +130,28 @@ export const PromptBox = ({
             reader.readAsDataURL(file);
           });
         } else {
+          // For other files, read as array buffer and convert to base64
           const reader = new FileReader();
-          content = await new Promise<string>((resolve, reject) => {
-            reader.onload = () => resolve(reader.result as string);
-            reader.onerror = reject;
-            reader.readAsText(file);
-          });
+          const arrayBuffer = await new Promise<ArrayBuffer>(
+            (resolve, reject) => {
+              reader.onload = () => resolve(reader.result as ArrayBuffer);
+              reader.onerror = reject;
+              reader.readAsArrayBuffer(file);
+            }
+          );
+
+          // Convert to base64 efficiently - avoid call stack overflow
+          const uint8Array = new Uint8Array(arrayBuffer);
+          let binaryString = "";
+          const chunkSize = 8192; // Process in chunks to avoid call stack issues
+
+          for (let i = 0; i < uint8Array.length; i += chunkSize) {
+            const chunk = uint8Array.slice(i, i + chunkSize);
+            binaryString += String.fromCharCode(...chunk);
+          }
+
+          const base64 = btoa(binaryString);
+          content = `data:${file.type};base64,${base64}`;
         }
 
         processedFiles.push({
@@ -162,6 +185,32 @@ export const PromptBox = ({
   };
 
   const renderFilePreview = (file: UploadedFile, index: number) => {
+    const getFileIcon = (type: string) => {
+      if (type.includes("pdf")) return "📄";
+      if (type.includes("word") || type.includes("document")) return "📝";
+      if (type.includes("excel") || type.includes("sheet")) return "📊";
+      if (type.includes("csv")) return "📋";
+      if (type.includes("powerpoint") || type.includes("presentation"))
+        return "📊";
+      if (type.includes("text")) return "📃";
+      if (type.includes("json")) return "🔧";
+      if (type.includes("xml")) return "🔧";
+      return "📄";
+    };
+
+    const getFileTypeLabel = (type: string) => {
+      if (type.includes("pdf")) return "PDF";
+      if (type.includes("word") || type.includes("document")) return "DOC";
+      if (type.includes("excel") || type.includes("sheet")) return "XLS";
+      if (type.includes("csv")) return "CSV";
+      if (type.includes("powerpoint") || type.includes("presentation"))
+        return "PPT";
+      if (type.includes("text")) return "TXT";
+      if (type.includes("json")) return "JSON";
+      if (type.includes("xml")) return "XML";
+      return "FILE";
+    };
+
     if (file.type.startsWith("image/")) {
       return (
         <div className="relative group">
@@ -174,21 +223,18 @@ export const PromptBox = ({
               sizes="120px"
               unoptimized
             />
-
             <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all duration-200 flex items-end">
               <div className="p-2 text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200 truncate w-full">
                 {file.name}
               </div>
             </div>
           </div>
-
           <button
             onClick={() => removeFile(index)}
             className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold transition-colors z-10"
           >
             ×
           </button>
-
           <div className="absolute top-1 left-1 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded">
             {formatFileSize(file.size)}
           </div>
@@ -199,22 +245,17 @@ export const PromptBox = ({
         <div className="flex items-center justify-between bg-[#505050] p-3 rounded-lg min-w-[200px] group">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0">
-              <span className="text-sm text-white font-semibold">
-                {file.type.includes("pdf")
-                  ? "PDF"
-                  : file.type.includes("word")
-                  ? "DOC"
-                  : file.type.includes("excel") || file.type.includes("csv")
-                  ? "XLS"
-                  : "TXT"}
-              </span>
+              <span className="text-lg">{getFileIcon(file.type)}</span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm text-white truncate max-w-[150px]">
+              <p
+                className="text-sm text-white truncate max-w-[150px]"
+                title={file.name}
+              >
                 {file.name}
               </p>
               <p className="text-xs text-white/60">
-                {formatFileSize(file.size)}
+                {getFileTypeLabel(file.type)} • {formatFileSize(file.size)}
               </p>
             </div>
           </div>

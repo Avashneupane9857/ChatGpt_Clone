@@ -1,25 +1,31 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export const maxDuration = 60;
+
 import { openai } from '@ai-sdk/openai';
 import { streamText, generateText } from 'ai';
 import { getAuth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/config/db";
 import Chat from "@/models/Chat";
-import { uploadToCloudinary } from "../../../../config/cloudinary";
+import { uploadToCloudinary } from "@/config/cloudinary";
 import MemoryClient from 'mem0ai';
+import { fileProcessor } from '../../../utils/file-processor';
 
+// Initialize Memory Client
 const memoryClient = new MemoryClient({ 
   apiKey: process.env.MEM0AI_KEY || ""
 });
 
+// Type Definitions
 interface UploadedFile {
   name: string;
   type: string;
   size: number;
   content: string;
+  processedContent?: string; // Add this to store processed content
   cloudinaryUrl?: string;
   cloudinaryPublicId?: string;
+  uploadedAt?: Date;
 }
 
 interface ChatMessage {
@@ -42,14 +48,83 @@ interface Memory {
   score?: number;
 }
 
+// Helper function to ensure content is always a string for database storage
+const normalizeMessageContent = (content: string | MessageContent[]): string => {
+  if (typeof content === 'string') {
+    return content || '[Empty message]';
+  }
+  
+  if (Array.isArray(content)) {
+    return content
+      .map(item => {
+        if (item.type === 'text') {
+          return item.text || '';
+        } else if (item.type === 'image') {
+          return '[Image]';
+        }
+        return '';
+      })
+      .join(' ')
+      .trim() || '[Empty message]';
+  }
+  
+  return '[Invalid message content]';
+};
+
+// Validate message before saving
+const validateMessage = (message: ChatMessage): ChatMessage => {
+  const normalizedContent = normalizeMessageContent(message.content);
+  
+  return {
+    ...message,
+    content: normalizedContent,
+    timestamp: message.timestamp || Date.now(),
+    role: message.role || 'user'
+  };
+};
+
+// File Processing Function - Fixed to handle file validation properly
+async function processFileContent(file: UploadedFile): Promise<string> {
+  try {
+    // Check if already processed
+    if (file.processedContent) {
+      console.log(`Using cached processed content for file: ${file.name}`);
+      return file.processedContent;
+    }
+
+    // Add detailed logging for debugging
+    console.log(`Processing file: ${file.name}`);
+    console.log(`File type: ${file.type}`);
+    console.log(`File size: ${file.size}`);
+    console.log(`Content exists: ${!!file.content}`);
+    console.log(`Content type: ${typeof file.content}`);
+    console.log(`Content length: ${file.content?.length || 0}`);
+    
+    // Validate file object has required properties
+    if (!file || typeof file !== 'object') {
+      throw new Error('Invalid file object provided');
+    }
+    
+    if (!file.name || !file.type || !file.content) {
+      throw new Error(`Missing required file properties: name=${!!file.name}, type=${!!file.type}, content=${!!file.content}`);
+    }
+   
+    const processed = await fileProcessor.processFile(file);
+    // Cache the processed content
+    file.processedContent = processed;
+    return processed;
+  } catch (error) {
+    console.error('Error processing file:', error);
+    return `Error processing file ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+  }
+}
+
+// Memory Management Functions
 const addMemories = async (messages: ChatMessage[], userId: string) => {
   try {
     const memoryMessages = messages.map(msg => ({
       role: msg.role,
-      content: typeof msg.content === 'string' ? msg.content : 
-               Array.isArray(msg.content) ? 
-               msg.content.map(c => c.text || c.type).join(' ') : 
-               String(msg.content)
+      content: normalizeMessageContent(msg.content)
     }));
     
     const result = await memoryClient.add(memoryMessages, { user_id: userId });
@@ -91,7 +166,8 @@ const getMemoryContext = async (prompt: string, userId: string) => {
   }
 };
 
-const uploadFilesToCloudinary = async (files: UploadedFile[]) => {
+// File Upload Functions
+const uploadFilesToCloudinary = async (files: UploadedFile[]): Promise<UploadedFile[]> => {
   const uploadPromises = files.map(async (file) => {
     try {
       let fileBuffer;
@@ -105,10 +181,13 @@ const uploadFilesToCloudinary = async (files: UploadedFile[]) => {
 
       const { url, publicId } = await uploadToCloudinary(fileBuffer, file.name, file.type);
       
+      // Return the file with cloudinary info but preserve original content
       return {
         ...file,
         cloudinaryUrl: url,
         cloudinaryPublicId: publicId,
+        // Keep original content for processing
+        content: file.content
       };
     } catch (error) {
       console.error(`Failed to upload ${file.name}:`, error);
@@ -119,64 +198,93 @@ const uploadFilesToCloudinary = async (files: UploadedFile[]) => {
   return Promise.all(uploadPromises);
 };
 
-const processFileContent = (file: UploadedFile): string => {
-  if (file.type.startsWith('image/')) {
-    return `[Image: ${file.name}]\nThis is an image file. Please analyze the image content.`;
-  } else if (file.type === 'application/pdf') {
-    return `[PDF Document: ${file.name}]\nContent: ${file.content}`;
-  } else if (file.type === 'text/plain') {
-    return `[Text Document: ${file.name}]\nContent: ${file.content}`;
-  } else if (file.type.includes('word')) {
-    return `[Word Document: ${file.name}]\nContent: ${file.content}`;
-  } else if (file.type.includes('excel') || file.type.includes('csv')) {
-    return `[Spreadsheet: ${file.name}]\nContent: ${file.content}`;
-  } else {
-    return `[Document: ${file.name}]\nContent: ${file.content}`;
+// Process files and cache the results
+const processAndCacheFiles = async (files: UploadedFile[]): Promise<UploadedFile[]> => {
+  const processedFiles = [];
+  
+  for (const file of files) {
+    if (!file.type.startsWith('image/')) {
+      console.log(`Pre-processing file: ${file.name}`);
+      try {
+        const processedContent = await processFileContent(file);
+        processedFiles.push({
+          ...file,
+          processedContent
+        });
+      } catch (error) {
+        console.error(`Error pre-processing file ${file.name}:`, error);
+        processedFiles.push({
+          ...file,
+          processedContent: `Error processing file ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`
+        });
+      }
+    } else {
+      processedFiles.push(file);
+    }
   }
+  
+  return processedFiles;
 };
 
-const createMessagesWithFiles = (messages: ChatMessage[]): any[] => {
-  return messages.map(msg => {
+// Fixed createMessagesWithFiles function
+const createMessagesWithFiles = async (messages: ChatMessage[]): Promise<any[]> => {
+  const processedMessages = [];
+  
+  for (const msg of messages) {
     if (msg.role === 'user' && msg.files && msg.files.length > 0) {
-      let content = typeof msg.content === 'string' ? msg.content : 
-                   Array.isArray(msg.content) ? 
-                   msg.content.map(c => c.text || '').join(' ') : 
-                   String(msg.content);
+      let content = normalizeMessageContent(msg.content);
       
       const messageContent: MessageContent[] = [];
       
-      messageContent.push({
-        type: "text",
-        text: content
-      });
+      // Add text content
+      if (content && content.trim()) {
+        messageContent.push({
+          type: "text",
+          text: content
+        });
+      }
 
-      msg.files.forEach((file: UploadedFile) => {
+      // Process each file
+      for (const file of msg.files) {
+        console.log(`Processing file in createMessagesWithFiles: ${file.name}`);
+        
         if (file.type.startsWith('image/')) {
           messageContent.push({
             type: "image",
             image: file.cloudinaryUrl || file.content
           });
         } else {
-          content += `\n\n${processFileContent(file)}`;
+          // Use cached processed content if available
+          if (file.processedContent) {
+            console.log(`Using cached processed content for ${file.name}`);
+            content += `\n\n${file.processedContent}`;
+          } else {
+            console.warn(`No processed content available for ${file.name}`);
+            // Don't add error message to content since processing might have succeeded elsewhere
+          }
         }
-      });
+      }
       
-      return {
+      // Ensure we have content
+      const finalContent = content.trim() || '[File uploaded]';
+      
+      processedMessages.push({
         role: msg.role,
-        content: messageContent.length > 1 ? messageContent : content
-      };
+        content: messageContent.length > 1 ? messageContent : finalContent
+      });
+    } else {
+      const normalizedContent = normalizeMessageContent(msg.content);
+      processedMessages.push({
+        role: msg.role,
+        content: normalizedContent
+      });
     }
-    
-    return {
-      role: msg.role,
-      content: typeof msg.content === 'string' ? msg.content : 
-               Array.isArray(msg.content) ? 
-               msg.content.map(c => c.text || '').join(' ') : 
-               String(msg.content)
-    };
-  });
+  }
+  
+  return processedMessages;
 };
 
+// Main POST Handler
 export async function POST(req: NextRequest) {
   try {
     const { userId } = getAuth(req);
@@ -186,6 +294,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: "User not authenticated" });
     }
 
+    // Validate prompt
+    if (!prompt || typeof prompt !== 'string' || prompt.trim() === '') {
+      return NextResponse.json({ 
+        success: false, 
+        message: "Prompt is required and must be a non-empty string" 
+      });
+    }
+
     await connectDB();
     const chat = await Chat.findOne({ userId, _id: chatId });
     
@@ -193,54 +309,116 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: "Chat not found" });
     }
 
-    let uploadedFiles: UploadedFile[] = [];
+    // Process files BEFORE uploading to Cloudinary
+    let processedFiles: UploadedFile[] = [];
     if (files.length > 0) {
       try {
-        uploadedFiles = await uploadFilesToCloudinary(files);
+        console.log('Pre-processing files...');
+        processedFiles = await processAndCacheFiles(files);
+        console.log('Files pre-processed successfully');
+        
+        console.log('Uploading files to Cloudinary...');
+        processedFiles = await uploadFilesToCloudinary(processedFiles);
+        console.log('Files uploaded successfully:', processedFiles.map(f => f.name));
       } catch (error) {
-        console.error('Error uploading files:', error);
+        console.error('Error processing/uploading files:', error);
         return NextResponse.json({ 
           success: false, 
-          message: "Failed to upload files to Cloudinary" 
+          message: "Failed to process or upload files" 
         });
       }
     }
 
     const memoryContext = await getMemoryContext(prompt, userId);
 
-    let userContent = prompt;
-    if (uploadedFiles.length > 0) {
-      uploadedFiles.forEach((file: UploadedFile) => {
-        if (!file.type.startsWith('image/')) {
-          userContent += `\n\n${processFileContent(file)}`;
-        }
-      });
+    // Keep user content clean for display (only original prompt)
+    let userContentForDisplay = prompt.trim();
+    
+    // Add file references for display (not full content)
+    if (processedFiles && processedFiles.length > 0) {
+      const nonImageFiles = processedFiles.filter(file => !file.type.startsWith('image/'));
+      if (nonImageFiles.length > 0) {
+        const fileRefs = nonImageFiles.map(file => `[File: ${file.name}]`).join(', ');
+        userContentForDisplay += `\n\n${fileRefs}`;
+      }
     }
 
+    // Create separate content for AI processing (with full file content)
+    let userContentForAI = prompt.trim();
+    
+    // Add processed content from non-image files for AI processing
+    if (processedFiles && processedFiles.length > 0) {
+      const nonImageFiles = processedFiles.filter(file => !file.type.startsWith('image/'));
+      if (nonImageFiles.length > 0) {
+        console.log('Adding processed content from non-image files for AI processing...');
+        for (const file of nonImageFiles) {
+          if (file.processedContent) {
+            userContentForAI += `\n\n${file.processedContent}`;
+          } else {
+            console.warn(`No processed content for file ${file.name}`);
+            userContentForAI += `\n\n[File ${file.name} was uploaded but content could not be processed]`;
+          }
+        }
+      }
+    }
+
+    // Ensure content is not empty
+    if (!userContentForDisplay.trim()) {
+      userContentForDisplay = '[Empty message with files]';
+    }
+    if (!userContentForAI.trim()) {
+      userContentForAI = '[Empty message with files]';
+    }
+
+    
     const userPrompt: ChatMessage = {
       role: "user",
-      content: userContent,
+      content: userContentForDisplay, 
       timestamp: Date.now(),
-      files: uploadedFiles.map(file => ({
+      files: processedFiles.map(file => ({
         name: file.name,
         type: file.type,
         size: file.size,
-        content: file.content, 
+        content: file.content,
+        processedContent: file.processedContent, 
         cloudinaryUrl: file.cloudinaryUrl,
         cloudinaryPublicId: file.cloudinaryPublicId,
         uploadedAt: new Date()
       }))
     };
 
+
+    const validatedUserPrompt = validateMessage(userPrompt);
+
     if (isEdit && typeof editIndex === 'number') {
       chat.messages = chat.messages.slice(0, editIndex);
-      chat.messages.push(userPrompt);
+      chat.messages.push(validatedUserPrompt);
     } else {
-      chat.messages.push(userPrompt);
+      chat.messages.push(validatedUserPrompt);
     }
 
-    const conversationMessages = createMessagesWithFiles(chat.messages);
+
+    const conversationMessages = await createMessagesWithFiles(chat.messages);
     
+
+    if (conversationMessages.length > 0) {
+      const lastMessage = conversationMessages[conversationMessages.length - 1];
+      if (lastMessage.role === 'user') {
+        if (typeof lastMessage.content === 'string') {
+          lastMessage.content = userContentForAI;
+        } else if (Array.isArray(lastMessage.content)) {
+          const textContent = lastMessage.content.find((c: any) => c.type === 'text');
+          if (textContent) {
+            textContent.text = userContentForAI;
+          }
+        }
+      }
+    }
+    
+ 
+    console.log('Conversation messages count:', conversationMessages.length);
+    console.log('Last message content type:', typeof conversationMessages[conversationMessages.length - 1]?.content);
+  
     if (memoryContext && conversationMessages.length > 0) {
       const lastMessage = conversationMessages[conversationMessages.length - 1];
       if (lastMessage.role === 'user') {
@@ -249,13 +427,13 @@ export async function POST(req: NextRequest) {
         } else if (Array.isArray(lastMessage.content)) {
           const textContent = lastMessage.content.find((c: any) => c.type === 'text');
           if (textContent) {
-            textContent.text = memoryContext + textContent.text;
+            textContent.text = memoryContext + (textContent.text || '');
           }
         }
       }
     }
 
-    const hasImages = uploadedFiles.some((file: UploadedFile) => file.type.startsWith('image/'));
+    const hasImages = processedFiles.some((file: UploadedFile) => file.type.startsWith('image/'));
     const model = hasImages ? "gpt-4o" : "gpt-3.5-turbo";
 
     if (stream) {
@@ -284,30 +462,56 @@ export async function POST(req: NextRequest) {
               
               controller.enqueue(encoder.encode(`data: ${data}\n\n`));
               
-              // Small delay to prevent overwhelming the client
+              
               await new Promise(resolve => setTimeout(resolve, 10));
             }
             
+            
+            const finalContent = fullContent.trim() || '[Empty response]';
+            
             const message: ChatMessage = {
               role: "assistant",
-              content: fullContent,
+              content: finalContent,
               timestamp: Date.now()
             };
             
-            chat.messages.push(message);
-            await chat.save();
+      
+            const validatedMessage = validateMessage(message);
+            
+   
+            chat.messages.push(validatedMessage);
+            
 
             try {
-              await addMemories([userPrompt, message], userId);
+              await chat.save();
+              console.log('Chat saved successfully');
+            } catch (saveError) {
+              console.error('Error saving chat:', saveError);
+              // Log details about the messages that failed validation
+              console.log('Messages with validation issues:', 
+                chat.messages.map((msg: ChatMessage, index: number) => ({
+                  index,
+                  role: msg.role,
+                  contentType: typeof msg.content,
+                  contentLength: (msg.content as string)?.length || 0,
+                  hasContent: !!msg.content
+                }))
+              );
+              throw saveError;
+            }
+
+            // Try to add memories, but don't fail if this fails
+            try {
+              await addMemories([validatedUserPrompt, validatedMessage], userId);
             } catch (memoryError) {
               console.error('Failed to add memories:', memoryError);
             }
             
             const finalData = JSON.stringify({ 
               content: '',
-              fullContent: fullContent,
+              fullContent: finalContent,
               done: true,
-              message: message
+              message: validatedMessage
             });
             controller.enqueue(encoder.encode(`data: ${finalData}\n\n`));
             
@@ -341,22 +545,43 @@ export async function POST(req: NextRequest) {
         maxTokens: hasImages ? 1000 : undefined,
       });
 
+
+      const finalContent = result.text.trim() || '[Empty response]';
+
       const message: ChatMessage = {
         role: "assistant",
-        content: result.text,
+        content: finalContent,
         timestamp: Date.now()
       };
 
-      chat.messages.push(message);
-      await chat.save();
+    
+      const validatedMessage = validateMessage(message);
+
+      chat.messages.push(validatedMessage);
+      
+      try {
+        await chat.save();
+      } catch (saveError) {
+        console.error('Error saving chat:', saveError);
+        console.log('Messages with validation issues:', 
+          chat.messages.map((msg: ChatMessage, index: number) => ({
+            index,
+            role: msg.role,
+            contentType: typeof msg.content,
+            contentLength: (msg.content as string)?.length || 0,
+            hasContent: !!msg.content
+          }))
+        );
+        throw saveError;
+      }
 
       try {
-        await addMemories([userPrompt, message], userId);
+        await addMemories([validatedUserPrompt, validatedMessage], userId);
       } catch (memoryError) {
         console.error('Failed to add memories:', memoryError);
       }
 
-      return NextResponse.json({ success: true, data: message });
+      return NextResponse.json({ success: true, data: validatedMessage });
     }
   } catch (error) {
     console.error("Error in /api/chat/ai:", error);
