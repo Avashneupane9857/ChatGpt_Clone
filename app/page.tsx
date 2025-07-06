@@ -2,7 +2,6 @@
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import menuIcon from "../assets/menu_icon.svg";
-import ChatIcon from "../assets/chat_icon.svg";
 
 import { Sidebar } from "@/components/Sidebar";
 import { PromptBox } from "@/components/PromptBox";
@@ -245,7 +244,6 @@ export default function Home() {
       <Sidebar expand={expand} setExpand={setExpand} />
 
       <div className="flex-1 flex flex-col bg-[#212121] text-white relative">
-        {/* Mobile Header */}
         <div className="md:hidden flex items-center justify-between p-4 border-b border-gray-700">
           <button
             onClick={() => setExpand(!expand)}
@@ -276,7 +274,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Desktop Header */}
         <div className="hidden md:flex items-center justify-between p-4">
           <button className="hover:bg-[#3E3F4B] text-white px-4 py-2 rounded-md flex items-center gap-1 transition-colors">
             ChatGPT
@@ -300,7 +297,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Main Content */}
         <div className="flex-1 flex flex-col items-center justify-center px-4 pb-8 relative overflow-hidden">
           {messages.length === 0 && !isStreaming && !showPreAnimation ? (
             <div className="flex items-center gap-3 text-center">
@@ -402,14 +398,14 @@ export default function Home() {
             />
           </div>
 
-          {/* Footer */}
+       
           <p className="text-xs text-white/60 mt-2 text-center px-4">
             ChatGPT can make mistakes. Check important info.
           </p>
         </div>
       </div>
 
-      {/* Mobile Sidebar Overlay */}
+  
       {expand && (
         <div
           className="md:hidden fixed inset-0 bg-black/50 z-40"

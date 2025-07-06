@@ -15,6 +15,7 @@
     "ai": "^4.3.16",
     "axios": "^1.10.0",
     "cloudinary": "^2.7.0",
+    "katex": "^0.16.22",
     "mem0ai": "^2.1.34",
     "mongoose": "^8.16.1",
     "next": "15.3.4",
@@ -25,6 +26,10 @@
     "react-hot-toast": "^2.5.2",
     "react-icons": "^5.5.0",
     "react-markdown": "^10.1.0",
+    "react-syntax-highlighter": "^15.6.1",
+    "rehype-katex": "^7.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
     "svix": "^1.68.0"
   },
   "devDependencies": {
@@ -34,6 +39,7 @@
     "@types/prismjs": "^1.26.5",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
+    "@types/react-syntax-highlighter": "^15.5.13",
     "eslint": "^9",
     "eslint-config-next": "15.3.4",
     "tailwindcss": "^4",
