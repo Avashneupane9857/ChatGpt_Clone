@@ -263,7 +263,7 @@ export default function Home() {
               <UserButton />
             ) : (
               <button
-                onClick={openSignIn}
+                onClick={() => openSignIn()}
                 className="p-1 hover:bg-gray-700 rounded-lg transition-colors"
               >
                 <Image
@@ -287,7 +287,7 @@ export default function Home() {
               <UserButton />
             ) : (
               <button
-                onClick={openSignIn}
+                onClick={() => openSignIn()}
                 className="flex items-center gap-3 text-white/60 text-sm p-2 hover:bg-white/10 rounded-lg transition-colors"
               >
                 <Image
