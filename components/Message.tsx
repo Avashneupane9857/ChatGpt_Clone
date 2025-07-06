@@ -22,6 +22,7 @@ interface MessageProps {
   files?: UploadedFile[];
   onEditMessage?: (messageIndex: number, content: string) => void;
   onRegenerateResponse?: (messageIndex: number) => void;
+  isStreaming?: boolean;
 }
 
 export const Message = ({
@@ -31,6 +32,7 @@ export const Message = ({
   files = [],
   onEditMessage,
   onRegenerateResponse,
+  isStreaming = false,
 }: MessageProps) => {
   useEffect(() => {
     Prism.highlightAll();
@@ -161,7 +163,6 @@ export const Message = ({
                 {content && <span>{content}</span>}
               </div>
 
-              {/* Action buttons below content for user */}
               <div className="flex gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 <Image
                   onClick={copyMessage}
@@ -184,42 +185,55 @@ export const Message = ({
               <div className="flex gap-3">
                 <div className="space-y-4 w-full overflow-scroll">
                   <div className="space-y-4 w-full overflow-scroll">
-                    <Markdown>
-                      {typeof content === "string" ? content : String(content)}
-                    </Markdown>
+                    {isStreaming ? (
+                      <div className="text-white/90 whitespace-pre-wrap">
+                        {typeof content === "string"
+                          ? content
+                          : String(content)}
+                        <span className="animate-pulse ml-1 text-white/60">
+                          ▋
+                        </span>
+                      </div>
+                    ) : (
+                      <Markdown>
+                        {typeof content === "string"
+                          ? content
+                          : String(content)}
+                      </Markdown>
+                    )}
                   </div>
                 </div>
               </div>
-
-              {/* Action buttons below content for assistant */}
-              <div className="flex gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <Image
-                  onClick={copyMessage}
-                  src={assets.copy_icon}
-                  alt="Copy"
-                  className="w-4 cursor-pointer hover:opacity-70"
-                  title="Copy message"
-                />
-                <Image
-                  onClick={handleRegenerateClick}
-                  src={assets.regenerate_icon}
-                  alt="Regenerate"
-                  className="w-4 cursor-pointer hover:opacity-70"
-                  title="Regenerate response"
-                />
-                <Image
-                  src={assets.like_icon}
-                  alt="Like"
-                  className="w-4 cursor-pointer hover:opacity-70"
-                  title="Like response"
-                />
-                <Image
-                  src={assets.dislike_icon}
-                  alt="Dislike"
-                  className="w-4 cursor-pointer hover:opacity-70"
-                  title="Dislike response"
-                />
-              </div>
+              {!isStreaming && (
+                <div className="flex gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Image
+                    onClick={copyMessage}
+                    src={assets.copy_icon}
+                    alt="Copy"
+                    className="w-4 cursor-pointer hover:opacity-70"
+                    title="Copy message"
+                  />
+                  <Image
+                    onClick={handleRegenerateClick}
+                    src={assets.regenerate_icon}
+                    alt="Regenerate"
+                    className="w-4 cursor-pointer hover:opacity-70"
+                    title="Regenerate response"
+                  />
+                  <Image
+                    src={assets.like_icon}
+                    alt="Like"
+                    className="w-4 cursor-pointer hover:opacity-70"
+                    title="Like response"
+                  />
+                  <Image
+                    src={assets.dislike_icon}
+                    alt="Dislike"
+                    className="w-4 cursor-pointer hover:opacity-70"
+                    title="Dislike response"
+                  />
+                </div>
+              )}
             </>
           )}
         </div>

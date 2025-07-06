@@ -9,7 +9,6 @@ import Chat from "@/models/Chat";
 import { uploadToCloudinary } from "../../../../config/cloudinary";
 import MemoryClient from 'mem0ai';
 
-
 const memoryClient = new MemoryClient({ 
   apiKey: process.env.MEM0AI_KEY || ""
 });
@@ -34,7 +33,6 @@ interface MessageContent {
   type: string;
   text?: string;
   image?: string;
-  
 }
 
 interface Memory {
@@ -42,13 +40,10 @@ interface Memory {
   text?: string;
   content?: string;
   score?: number;
-
 }
-
 
 const addMemories = async (messages: ChatMessage[], userId: string) => {
   try {
-
     const memoryMessages = messages.map(msg => ({
       role: msg.role,
       content: typeof msg.content === 'string' ? msg.content : 
@@ -66,7 +61,6 @@ const addMemories = async (messages: ChatMessage[], userId: string) => {
   }
 };
 
-// Function to search memories from Mem0
 const searchMemories = async (query: string, userId: string): Promise<Memory[]> => {
   try {
     const results = await memoryClient.search(query, { user_id: userId });
@@ -78,7 +72,6 @@ const searchMemories = async (query: string, userId: string): Promise<Memory[]> 
   }
 };
 
-// Function to get relevant memories and create context
 const getMemoryContext = async (prompt: string, userId: string) => {
   try {
     const memories = await searchMemories(prompt, userId);
@@ -98,7 +91,6 @@ const getMemoryContext = async (prompt: string, userId: string) => {
   }
 };
 
-// Function to upload files to Cloudinary
 const uploadFilesToCloudinary = async (files: UploadedFile[]) => {
   const uploadPromises = files.map(async (file) => {
     try {
@@ -127,7 +119,6 @@ const uploadFilesToCloudinary = async (files: UploadedFile[]) => {
   return Promise.all(uploadPromises);
 };
 
-// Function to process file content based on type
 const processFileContent = (file: UploadedFile): string => {
   if (file.type.startsWith('image/')) {
     return `[Image: ${file.name}]\nThis is an image file. Please analyze the image content.`;
@@ -144,7 +135,6 @@ const processFileContent = (file: UploadedFile): string => {
   }
 };
 
-// Function to create messages with file support for Vercel AI SDK
 const createMessagesWithFiles = (messages: ChatMessage[]): any[] => {
   return messages.map(msg => {
     if (msg.role === 'user' && msg.files && msg.files.length > 0) {
@@ -155,22 +145,18 @@ const createMessagesWithFiles = (messages: ChatMessage[]): any[] => {
       
       const messageContent: MessageContent[] = [];
       
-      // Add text content
       messageContent.push({
         type: "text",
         text: content
       });
 
-      // Process each file
       msg.files.forEach((file: UploadedFile) => {
         if (file.type.startsWith('image/')) {
-          // For images, use Vercel AI SDK image format
           messageContent.push({
             type: "image",
             image: file.cloudinaryUrl || file.content
           });
         } else {
-          // For other files, append content as text
           content += `\n\n${processFileContent(file)}`;
         }
       });
@@ -207,7 +193,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: "Chat not found" });
     }
 
-    // Upload files to Cloudinary if any
     let uploadedFiles: UploadedFile[] = [];
     if (files.length > 0) {
       try {
@@ -221,10 +206,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Get memory context for the user's prompt
     const memoryContext = await getMemoryContext(prompt, userId);
 
-    // Create user message with files
     let userContent = prompt;
     if (uploadedFiles.length > 0) {
       uploadedFiles.forEach((file: UploadedFile) => {
@@ -256,17 +239,14 @@ export async function POST(req: NextRequest) {
       chat.messages.push(userPrompt);
     }
 
-    // Prepare messages for Vercel AI SDK with memory context
     const conversationMessages = createMessagesWithFiles(chat.messages);
     
-    // Add memory context to the latest user message if available
     if (memoryContext && conversationMessages.length > 0) {
       const lastMessage = conversationMessages[conversationMessages.length - 1];
       if (lastMessage.role === 'user') {
         if (typeof lastMessage.content === 'string') {
           lastMessage.content = memoryContext + lastMessage.content;
         } else if (Array.isArray(lastMessage.content)) {
-          // Find the text content and prepend memory context
           const textContent = lastMessage.content.find((c: any) => c.type === 'text');
           if (textContent) {
             textContent.text = memoryContext + textContent.text;
@@ -275,19 +255,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Check if we have images to use GPT-4 Vision
     const hasImages = uploadedFiles.some((file: UploadedFile) => file.type.startsWith('image/'));
     const model = hasImages ? "gpt-4o" : "gpt-3.5-turbo";
 
     if (stream) {
-      // Streaming response using Vercel AI SDK
       const result = await streamText({
         model: openai(model),
         messages: conversationMessages,
         maxTokens: hasImages ? 1000 : undefined,
       });
 
-      // Handle streaming response
+      // Enhanced streaming with better performance
       const stream = new ReadableStream({
         async start(controller) {
           const encoder = new TextEncoder();
@@ -296,15 +274,20 @@ export async function POST(req: NextRequest) {
           try {
             for await (const chunk of result.textStream) {
               fullContent += chunk;
+              
+              // Send each chunk immediately as it arrives
               const data = JSON.stringify({ 
-                content: chunk,
+                content: chunk, // Send only the new chunk
                 fullContent: fullContent,
                 done: false 
               });
+              
               controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+              
+              // Small delay to prevent overwhelming the client
+              await new Promise(resolve => setTimeout(resolve, 10));
             }
             
-            // Save the complete message to database
             const message: ChatMessage = {
               role: "assistant",
               content: fullContent,
@@ -314,15 +297,12 @@ export async function POST(req: NextRequest) {
             chat.messages.push(message);
             await chat.save();
 
-            // Add the conversation to memory after completion
             try {
               await addMemories([userPrompt, message], userId);
             } catch (memoryError) {
               console.error('Failed to add memories:', memoryError);
-              // Don't fail the request if memory addition fails
             }
             
-            // Send final chunk
             const finalData = JSON.stringify({ 
               content: '',
               fullContent: fullContent,
@@ -349,10 +329,12 @@ export async function POST(req: NextRequest) {
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
           'Connection': 'keep-alive',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
         },
       });
     } else {
-
       const result = await generateText({
         model: openai(model),
         messages: conversationMessages,
@@ -368,19 +350,16 @@ export async function POST(req: NextRequest) {
       chat.messages.push(message);
       await chat.save();
 
-      // Add the conversation to memory
       try {
         await addMemories([userPrompt, message], userId);
       } catch (memoryError) {
         console.error('Failed to add memories:', memoryError);
-        // Don't fail the request if memory addition fails
       }
 
       return NextResponse.json({ success: true, data: message });
     }
   } catch (error) {
-    console.log("Error in /api/chat/ai:", error);
-    console.error(error);
+    console.error("Error in /api/chat/ai:", error);
     return NextResponse.json({ 
       success: false, 
       error: error instanceof Error ? error.message : "Unknown error occurred" 

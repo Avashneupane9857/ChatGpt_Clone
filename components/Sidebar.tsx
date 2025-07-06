@@ -2,7 +2,7 @@ import Image from "next/image";
 import { assets } from "../assets/assets";
 import { useAppContext } from "@/context/AppContext";
 import { ChatLabel } from "./ChatLabel";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 
 interface SidebarProps {
   expand: boolean;
@@ -12,16 +12,45 @@ interface SidebarProps {
 export const Sidebar = ({ expand, setExpand }: SidebarProps) => {
   const { chat, createNewChat } = useAppContext();
   const [openMenu, setOpenMenu] = useState({ id: "", open: false });
+  const sidebarRef = useRef<HTMLDivElement>(null);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        sidebarRef.current &&
+        !sidebarRef.current.contains(event.target as Node)
+      ) {
+        setOpenMenu({ id: "", open: false });
+      }
+    };
+
+    if (openMenu.open) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [openMenu.open]);
+
+  // Close menu when sidebar collapses
+  useEffect(() => {
+    if (!expand) {
+      setOpenMenu({ id: "", open: false });
+    }
+  }, [expand]);
 
   return (
     <div
-      className={`flex flex-col justify-between bg-[#1a1a1a] transition-all z-50 max-md:h-screen ${
-        expand ? "p-5  w-60" : "md:w-20 w-0 max-md:overflow-hidden"
+      ref={sidebarRef}
+      className={`flex flex-col bg-[#1a1a1a] transition-all z-50 max-md:h-screen ${
+        expand ? "p-5 w-60" : "md:w-20 w-0 max-md:overflow-hidden"
       }`}
     >
-      <div className={`flex-1 ${!expand ? "p-5" : ""}`}>
+      <div className={`flex-1 flex flex-col min-h-0 ${!expand ? "p-5" : ""}`}>
         <div
-          className={`flex items-center justify-between mb-8 ${
+          className={`flex items-center justify-between mb-8 flex-shrink-0 ${
             expand ? "" : "justify-center"
           }`}
         >
@@ -70,126 +99,134 @@ export const Sidebar = ({ expand, setExpand }: SidebarProps) => {
           </div>
         </div>
 
-        <div className="space-y-2">
-          <button
-            onClick={createNewChat}
-            className={`flex items-center w-full text-left text-white/90 hover:bg-gray-500/20 transition-all duration-200 rounded-lg ${
-              expand
-                ? "px-4 py-3 gap-3"
-                : "group relative h-10 w-10 mx-auto justify-center"
-            }`}
-          >
-            <Image
-              src={expand ? assets.chat_icon : assets.chat_icon_dull}
-              alt=""
-              className="w-5 h-5"
-            />
-            {expand && <span className="text-sm font-medium">New chat</span>}
-            {!expand && (
-              <div className="absolute w-max -top-12 -right-12 opacity-0 group-hover:opacity-100 transition bg-black text-white text-sm px-3 py-2 rounded-lg shadow-lg pointer-events-none">
-                New Chat
-                <div className="w-3 h-3 absolute bg-black rotate-45 left-4 -bottom-1.5"></div>
-              </div>
-            )}
-          </button>
-
-          <button
-            className={`flex items-center w-full text-left text-white/70 hover:bg-gray-500/20 transition-all duration-200 rounded-lg ${
-              expand
-                ? "px-4 py-3 gap-3"
-                : "group relative h-10 w-10 mx-auto justify-center"
-            }`}
-          >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+        {/* Fixed height container for the scrollable content */}
+        <div className="flex-1 flex flex-col min-h-0">
+          <div className="space-y-2 flex-shrink-0">
+            <button
+              onClick={createNewChat}
+              className={`flex items-center w-full text-left text-white/90 hover:bg-gray-500/20 transition-all duration-200 rounded-lg ${
+                expand
+                  ? "px-4 py-3 gap-3"
+                  : "group relative h-10 w-10 mx-auto justify-center"
+              }`}
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              <Image
+                src={expand ? assets.chat_icon : assets.chat_icon_dull}
+                alt=""
+                className="w-5 h-5"
               />
-            </svg>
-            {expand && <span className="text-sm">Search chats</span>}
-            {!expand && (
-              <div className="absolute w-max -top-12 -right-12 opacity-0 group-hover:opacity-100 transition bg-black text-white text-sm px-3 py-2 rounded-lg shadow-lg pointer-events-none">
-                Search chats
-                <div className="w-3 h-3 absolute bg-black rotate-45 left-4 -bottom-1.5"></div>
-              </div>
-            )}
-          </button>
+              {expand && <span className="text-sm font-medium">New chat</span>}
+              {!expand && (
+                <div className="absolute w-max -top-12 -right-12 opacity-0 group-hover:opacity-100 transition bg-black text-white text-sm px-3 py-2 rounded-lg shadow-lg pointer-events-none">
+                  New Chat
+                  <div className="w-3 h-3 absolute bg-black rotate-45 left-4 -bottom-1.5"></div>
+                </div>
+              )}
+            </button>
 
-          <button
-            className={`flex items-center w-full text-left text-white/70 hover:bg-gray-500/20 transition-all duration-200 rounded-lg ${
-              expand
-                ? "px-4 py-3 gap-3"
-                : "group relative h-10 w-10 mx-auto justify-center"
-            }`}
-          >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+            <button
+              className={`flex items-center w-full text-left text-white/70 hover:bg-gray-500/20 transition-all duration-200 rounded-lg ${
+                expand
+                  ? "px-4 py-3 gap-3"
+                  : "group relative h-10 w-10 mx-auto justify-center"
+              }`}
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-              />
-            </svg>
-            {expand && <span className="text-sm">Library</span>}
-            {!expand && (
-              <div className="absolute w-max -top-12 -right-12 opacity-0 group-hover:opacity-100 transition bg-black text-white text-sm px-3 py-2 rounded-lg shadow-lg pointer-events-none">
-                Library
-                <div className="w-3 h-3 absolute bg-black rotate-45 left-4 -bottom-1.5"></div>
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
+              </svg>
+              {expand && <span className="text-sm">Search chats</span>}
+              {!expand && (
+                <div className="absolute w-max -top-12 -right-12 opacity-0 group-hover:opacity-100 transition bg-black text-white text-sm px-3 py-2 rounded-lg shadow-lg pointer-events-none">
+                  Search chats
+                  <div className="w-3 h-3 absolute bg-black rotate-45 left-4 -bottom-1.5"></div>
+                </div>
+              )}
+            </button>
+
+            <button
+              className={`flex items-center w-full text-left text-white/70 hover:bg-gray-500/20 transition-all duration-200 rounded-lg ${
+                expand
+                  ? "px-4 py-3 gap-3"
+                  : "group relative h-10 w-10 mx-auto justify-center"
+              }`}
+            >
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+                />
+              </svg>
+              {expand && <span className="text-sm">Library</span>}
+              {!expand && (
+                <div className="absolute w-max -top-12 -right-12 opacity-0 group-hover:opacity-100 transition bg-black text-white text-sm px-3 py-2 rounded-lg shadow-lg pointer-events-none">
+                  Library
+                  <div className="w-3 h-3 absolute bg-black rotate-45 left-4 -bottom-1.5"></div>
+                </div>
+              )}
+            </button>
+
+            <div className={`my-6 ${expand ? "block" : "hidden"}`}>
+              <div className="h-px bg-white/10"></div>
+            </div>
+
+            {expand && (
+              <div className="space-y-2 flex-shrink-0">
+                <button className="flex items-center w-full text-left text-white/70 hover:bg-gray-500/20 transition-all duration-200 rounded-lg px-4 py-3 gap-3">
+                  <div className="w-5 h-5 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
+                    <span className="text-white text-xs font-bold">S</span>
+                  </div>
+                  <span className="text-sm">Sora</span>
+                </button>
+
+                <button className="flex items-center w-full text-left text-white/70 hover:bg-gray-500/20 transition-all duration-200 rounded-lg px-4 py-3 gap-3">
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                    />
+                  </svg>
+                  <span className="text-sm">GPTs</span>
+                </button>
               </div>
             )}
-          </button>
-
-          <div className={`my-6 ${expand ? "block" : "hidden"}`}>
-            <div className="h-px bg-white/10"></div>
           </div>
 
-          {expand && (
-            <div className="space-y-2">
-              <button className="flex items-center w-full text-left text-white/70 hover:bg-gray-500/20 transition-all duration-200 rounded-lg px-4 py-3 gap-3">
-                <div className="w-5 h-5 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
-                  <span className="text-white text-xs font-bold">S</span>
-                </div>
-                <span className="text-sm">Sora</span>
-              </button>
-
-              <button className="flex items-center w-full text-left text-white/70 hover:bg-gray-500/20 transition-all duration-200 rounded-lg px-4 py-3 gap-3">
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                  />
-                </svg>
-                <span className="text-sm">GPTs</span>
-              </button>
-            </div>
-          )}
-
-          <div className={`mt-8 ${expand ? "block" : "hidden"}`}>
-            <div className="mb-3">
+          {/* Scrollable chat section with proper height constraints */}
+          <div
+            className={`flex-1 flex flex-col min-h-0 ${
+              expand ? "mt-8" : "hidden"
+            }`}
+          >
+            <div className="mb-3 flex-shrink-0">
               <h3 className="text-white/40 text-xs font-medium uppercase tracking-wider px-4">
                 Chats
               </h3>
             </div>
-            <div className="space-y-1 max-h-96 overflow-y-auto">
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-1 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent hover:scrollbar-thumb-gray-500">
               {chat.map((chatItem) => (
                 <ChatLabel
                   key={chatItem._id}
@@ -204,8 +241,9 @@ export const Sidebar = ({ expand, setExpand }: SidebarProps) => {
         </div>
       </div>
 
+      {/* Fixed bottom section */}
       <div
-        className={`mt-6 pt-4 border-t border-white/10 ${
+        className={`mt-6 pt-4 border-t border-white/10 flex-shrink-0 ${
           expand ? "block" : "hidden"
         }`}
       >

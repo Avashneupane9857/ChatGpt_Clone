@@ -63,6 +63,7 @@ export default function Home() {
   const [showPreAnimation, setShowPreAnimation] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const streamingRef = useRef<string>("");
 
   useEffect(() => {
     if (selectedChat?.messages) {
@@ -95,6 +96,7 @@ export default function Home() {
       setIsLoading(true);
       setShowPreAnimation(true);
       setStreamingMessage("");
+      streamingRef.current = "";
 
       const response = await fetch("/api/chat/ai", {
         method: "POST",
@@ -120,7 +122,8 @@ export default function Home() {
         throw new Error("No reader available");
       }
 
-      let fullContent = "";
+      setShowPreAnimation(false);
+      setIsStreaming(true);
 
       while (true) {
         const { done, value } = await reader.read();
@@ -139,20 +142,17 @@ export default function Home() {
               }
 
               if (data.content) {
-                // Hide pre-animation and start streaming when first content arrives
-                if (showPreAnimation) {
-                  setShowPreAnimation(false);
-                  setIsStreaming(true);
-                }
-                fullContent += data.content;
-                setStreamingMessage(fullContent);
+                streamingRef.current += data.content;
+
+                // Update the streaming message state immediately
+                setStreamingMessage(streamingRef.current);
               }
 
               if (data.done) {
                 // Streaming complete, update the chat
                 const finalMessage = data.message || {
                   role: "assistant",
-                  content: fullContent,
+                  content: streamingRef.current,
                   timestamp: Date.now(),
                 };
 
@@ -177,7 +177,8 @@ export default function Home() {
 
                 setStreamingMessage("");
                 setIsStreaming(false);
-                setShowPreAnimation(false); // Ensure pre-animation is hidden
+                setShowPreAnimation(false);
+                streamingRef.current = "";
 
                 return;
               }
@@ -193,6 +194,7 @@ export default function Home() {
       setStreamingMessage("");
       setIsStreaming(false);
       setShowPreAnimation(false);
+      streamingRef.current = "";
     } finally {
       setIsLoading(false);
     }
@@ -228,7 +230,6 @@ export default function Home() {
         };
       });
 
-      // Use streaming for regeneration
       await onStreamingResponse(
         selectedChat._id,
         userMessage.content,
@@ -301,10 +302,10 @@ export default function Home() {
                     setEditingMessage({ messageIndex, content });
                   }}
                   onRegenerateResponse={handleRegenerateResponse}
+                  isStreaming={false} // These are completed messages
                 />
               ))}
 
-              {/* Pre-animation - ChatGPT-like thinking animation */}
               {showPreAnimation && (
                 <div className="flex flex-col items-center text-sm w-full max-w-3xl">
                   <div className="flex flex-col w-full mb-8">
@@ -336,32 +337,17 @@ export default function Home() {
                 </div>
               )}
 
-              {/* Streaming response */}
-              {isStreaming && streamingMessage && (
-                <div className="flex flex-col items-center text-sm w-full max-w-3xl">
-                  <div className="flex flex-col w-full mb-8">
-                    <div className="group flex flex-col max-w-2xl py-3 px-5 rounded-xl bg-transparent gap-3">
-                      <div className="flex gap-3">
-                        <Image
-                          src={assets.logo_icon}
-                          alt=""
-                          className="h-9 w-9 border p-1 border-white/15 rounded-full"
-                        />
-                        <div className="space-y-4 w-full overflow-scroll">
-                          <div className="space-y-4 w-full overflow-scroll">
-                            <div className="text-white/90">
-                              {streamingMessage}
-                              <span className="animate-pulse">|</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+              {isStreaming && (
+                <MessageComponent
+                  role="assistant"
+                  content={streamingMessage}
+                  messageIndex={-1}
+                  onEditMessage={() => {}}
+                  onRegenerateResponse={() => {}}
+                  isStreaming={true}
+                />
               )}
 
-              {/* Legacy loading animation (kept as fallback) */}
               {isLoading && !isStreaming && !showPreAnimation && (
                 <div className="flex gap-4 max-w-3xl w-full py-3">
                   <Image
