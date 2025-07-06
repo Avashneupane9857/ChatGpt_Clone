@@ -1,7 +1,6 @@
-// utils/cloudinary.js
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { v2 as cloudinary } from 'cloudinary';
 
-// Configure Cloudinary
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
@@ -9,7 +8,11 @@ cloudinary.config({
 });
 
 // Upload file to Cloudinary
-export const uploadToCloudinary = async (fileBuffer, fileName, fileType) => {
+export const uploadToCloudinary = async (
+  fileBuffer: Buffer, 
+  fileName: string, 
+  fileType: string
+): Promise<{ url: string; publicId: string }> => {
   try {
     const resourceType = fileType.startsWith('image/') ? 'image' : 'raw';
     
@@ -23,7 +26,7 @@ export const uploadToCloudinary = async (fileBuffer, fileName, fileType) => {
         unique_filename: false,
       }
     );
-
+    
     return {
       url: result.secure_url,
       publicId: result.public_id,
@@ -35,7 +38,7 @@ export const uploadToCloudinary = async (fileBuffer, fileName, fileType) => {
 };
 
 // Delete file from Cloudinary
-export const deleteFromCloudinary = async (publicId) => {
+export const deleteFromCloudinary = async (publicId: string): Promise<any> => {
   try {
     const result = await cloudinary.uploader.destroy(publicId);
     return result;
@@ -46,7 +49,11 @@ export const deleteFromCloudinary = async (publicId) => {
 };
 
 // Get optimized image URL
-export const getOptimizedImageUrl = (publicId, width = 400, height = 300) => {
+export const getOptimizedImageUrl = (
+  publicId: string, 
+  width: number = 400, 
+  height: number = 300
+): string => {
   return cloudinary.url(publicId, {
     width: width,
     height: height,
