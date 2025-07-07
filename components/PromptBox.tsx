@@ -11,6 +11,7 @@ interface UploadedFile {
   size: number;
   content: string;
   url?: string;
+  cloudinaryUrl?: string;
 }
 
 interface Message {
@@ -55,8 +56,13 @@ export const PromptBox = ({
   useEffect(() => {
     if (editingMessage) {
       setPrompt(editingMessage.content);
+      if (selectedChat && selectedChat.messages[editingMessage.messageIndex]?.files) {
+        setUploadedFiles(selectedChat.messages[editingMessage.messageIndex].files ?? []);
+      } else {
+        setUploadedFiles([]);
+      }
     }
-  }, [editingMessage]);
+  }, [editingMessage, selectedChat]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {

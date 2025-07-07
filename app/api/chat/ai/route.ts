@@ -170,17 +170,18 @@ const getMemoryContext = async (prompt: string, userId: string) => {
 const uploadFilesToCloudinary = async (files: UploadedFile[]): Promise<UploadedFile[]> => {
   const uploadPromises = files.map(async (file) => {
     try {
+      // If the file already has a cloudinaryUrl, skip re-uploading
+      if (file.type.startsWith('image/') && file.cloudinaryUrl) {
+        return file;
+      }
       let fileBuffer;
-      
       if (file.type.startsWith('image/')) {
         const base64Data = file.content.split(',')[1];
         fileBuffer = Buffer.from(base64Data, 'base64');
       } else {
         fileBuffer = Buffer.from(file.content, 'utf8');
       }
-
       const { url, publicId } = await uploadToCloudinary(fileBuffer, file.name, file.type);
-      
       // Return the file with cloudinary info but preserve original content
       return {
         ...file,
@@ -194,7 +195,6 @@ const uploadFilesToCloudinary = async (files: UploadedFile[]): Promise<UploadedF
       throw new Error(`Failed to upload ${file.name}`);
     }
   });
-
   return Promise.all(uploadPromises);
 };
 
@@ -203,6 +203,11 @@ const processAndCacheFiles = async (files: UploadedFile[]): Promise<UploadedFile
   const processedFiles = [];
   
   for (const file of files) {
+    // Skip processing if image and already has cloudinaryUrl (editing case)
+    if (file.type.startsWith('image/') && file.cloudinaryUrl) {
+      processedFiles.push(file);
+      continue;
+    }
     if (!file.type.startsWith('image/')) {
       console.log(`Pre-processing file: ${file.name}`);
       try {
