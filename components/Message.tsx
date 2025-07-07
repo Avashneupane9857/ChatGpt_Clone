@@ -317,25 +317,7 @@ export const Message = ({
                     ))}
                   </div>
                 )}
-
                 {content && <span>{content}</span>}
-              </div>
-
-              <div className="flex gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <Image
-                  onClick={copyMessage}
-                  src={assets.copy_icon}
-                  alt="Copy"
-                  className="w-4 cursor-pointer hover:opacity-70"
-                  title="Copy message"
-                />
-                <Image
-                  onClick={handleEditClick}
-                  src={assets.pencil_icon}
-                  alt="Edit"
-                  className="w-4 cursor-pointer hover:opacity-70"
-                  title="Edit message"
-                />
               </div>
             </>
           ) : (
@@ -397,6 +379,25 @@ export const Message = ({
             </>
           )}
         </div>
+        {/* User message action buttons below the bubble */}
+        {role === "user" && (
+          <div className="flex gap-2 mt-2 ml-2">
+            <Image
+              onClick={copyMessage}
+              src={assets.copy_icon}
+              alt="Copy"
+              className="w-4 cursor-pointer hover:opacity-70"
+              title="Copy message"
+            />
+            <Image
+              onClick={handleEditClick}
+              src={assets.pencil_icon}
+              alt="Edit"
+              className="w-4 cursor-pointer hover:opacity-70"
+              title="Edit message"
+            />
+          </div>
+        )}
       </div>
     </div>
   );

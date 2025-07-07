@@ -3,6 +3,7 @@ import { assets } from "../assets/assets";
 import { useAppContext } from "@/context/AppContext";
 import { ChatLabel } from "./ChatLabel";
 import { useState, useEffect, useRef } from "react";
+import toast from "react-hot-toast";
 
 interface SidebarProps {
   expand: boolean;
@@ -13,6 +14,27 @@ export const Sidebar = ({ expand, setExpand }: SidebarProps) => {
   const { chat, createNewChat } = useAppContext();
   const [openMenu, setOpenMenu] = useState({ id: "", open: false });
   const sidebarRef = useRef<HTMLDivElement>(null);
+
+  // Fetch memories from backend
+  const fetchMemories = async () => {
+    try {
+      const res = await fetch("/api/memories");
+      const data = await res.json();
+      if (data.success) {
+        // Assuming data.memories is an array of Memory objects
+        // You might want to handle the data format based on your actual API response
+        console.log("Memories fetched:", data.memories);
+      } else {
+        toast.error(data.message || "Failed to fetch memories");
+      }
+    } catch {
+      toast.error("Failed to fetch memories");
+    }
+  };
+
+  useEffect(() => {
+    fetchMemories();
+  }, []);
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -124,7 +146,9 @@ export const Sidebar = ({ expand, setExpand }: SidebarProps) => {
               )}
             </button>
 
+            {/* Memories Button (replaces Search chats) */}
             <button
+              onClick={() => window.open('/memories', '_blank')}
               className={`flex items-center w-full text-left text-white/70 hover:bg-gray-500/20 transition-all duration-200 rounded-lg ${
                 expand
                   ? "px-4 py-3 gap-3"
@@ -141,13 +165,13 @@ export const Sidebar = ({ expand, setExpand }: SidebarProps) => {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  d="M12 4v16m8-8H4"
                 />
               </svg>
-              {expand && <span className="text-sm">Search chats</span>}
+              {expand && <span className="text-sm">Memories</span>}
               {!expand && (
                 <div className="absolute w-max -top-12 -right-12 opacity-0 group-hover:opacity-100 transition bg-black text-white text-sm px-3 py-2 rounded-lg shadow-lg pointer-events-none">
-                  Search chats
+                  Memories
                   <div className="w-3 h-3 absolute bg-black rotate-45 left-4 -bottom-1.5"></div>
                 </div>
               )}
