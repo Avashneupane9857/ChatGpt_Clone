@@ -334,6 +334,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const hasImages = processedFiles.some((file: UploadedFile) => file.type.startsWith('image/'));
+    const model = hasImages ? "gpt-4o" : "gpt-3.5-turbo";
+
     const memoryContext = await getMemoryContext(prompt, userId);
 
     // Keep user content clean for display (only original prompt)
@@ -405,6 +408,14 @@ export async function POST(req: NextRequest) {
 
     const conversationMessages = await createMessagesWithFiles(chat.messages);
     
+    // If using gpt-3.5-turbo, ensure all message contents are strings
+    if (model === 'gpt-3.5-turbo') {
+      for (let i = 0; i < conversationMessages.length; i++) {
+        if (typeof conversationMessages[i].content !== 'string') {
+          conversationMessages[i].content = normalizeMessageContent(conversationMessages[i].content);
+        }
+      }
+    }
 
     if (conversationMessages.length > 0) {
       const lastMessage = conversationMessages[conversationMessages.length - 1];
@@ -437,9 +448,6 @@ export async function POST(req: NextRequest) {
         }
       }
     }
-
-    const hasImages = processedFiles.some((file: UploadedFile) => file.type.startsWith('image/'));
-    const model = hasImages ? "gpt-4o" : "gpt-3.5-turbo";
 
     if (stream) {
       const result = await streamText({
