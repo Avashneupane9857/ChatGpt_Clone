@@ -405,6 +405,12 @@ export async function POST(req: NextRequest) {
       chat.messages.push(validatedUserPrompt);
     }
 
+    if (chat.name === "New chat" && prompt && typeof prompt === "string") {
+      const words = prompt.trim().split(/\s+/).slice(0, 2).join(" ");
+      chat.name = words || "New chat";
+    }
+
+    await chat.save();
 
     const conversationMessages = await createMessagesWithFiles(chat.messages);
     

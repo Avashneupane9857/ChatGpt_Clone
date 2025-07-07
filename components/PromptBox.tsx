@@ -50,7 +50,7 @@ export const PromptBox = ({
   const [prompt, setPrompt] = useState<string>("");
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { user, selectedChat, setSelectedChat } = useAppContext();
+  const { user, selectedChat, setSelectedChat, fetchUserChats } = useAppContext();
   const { openSignIn } = useClerk();
 
   useEffect(() => {
@@ -326,6 +326,15 @@ export const PromptBox = ({
 
       // Start streaming response for the edited message
       await onStreamingResponse(selectedChat._id, currentPrompt, currentFiles);
+
+      // Refresh chat list and update selectedChat
+      await fetchUserChats();
+      setSelectedChat((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+        };
+      });
     } catch (error) {
       console.error("Error editing message:", error);
       toast.error("Failed to edit message");
@@ -377,6 +386,15 @@ export const PromptBox = ({
       setUploadedFiles([]);
 
       await onStreamingResponse(selectedChat._id, currentPrompt, currentFiles);
+
+      // Refresh chat list and update selectedChat
+      await fetchUserChats();
+      setSelectedChat((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+        };
+      });
     } catch (error) {
       console.error("Error sending message:", error);
       toast.error("Failed to send message");
