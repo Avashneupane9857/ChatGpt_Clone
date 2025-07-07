@@ -239,56 +239,34 @@ const uploadFilesToCloudinary = async (files: UploadedFile[]): Promise<UploadedF
 // Fixed createMessagesWithFiles function
 const createMessagesWithFiles = async (messages: ChatMessage[]): Promise<any[]> => {
   const processedMessages = [];
-  
   for (const msg of messages) {
     if (msg.role === 'user' && msg.files && msg.files.length > 0) {
-      let content = normalizeMessageContent(msg.content);
-      
-      const messageContent: MessageContent[] = [];
-      
-      // Add text content
-      if (content && content.trim()) {
-        messageContent.push({
-          type: "text",
-          text: content
-        });
-      }
-
-      // Process each file
+      // Combine user prompt and all non-image processedContent into one text block
+      let combinedText = normalizeMessageContent(msg.content);
       for (const file of msg.files) {
-        console.log(`Processing file in createMessagesWithFiles: ${file.name}`);
-        
-        if (file.type.startsWith('image/')) {
-          messageContent.push({
-            type: "image",
-            image: file.cloudinaryUrl || file.content
-          });
-        } else {
-          // Use processedContent if available
-          if (file.processedContent) {
-            console.log(`Using cached processed content for ${file.name}`);
-            content += `\n\n${file.processedContent}`;
-          } else if (file.content) {
-            // If processedContent is missing but content exists, process it now
-            try {
-              const processed = await fileProcessor.processFile(file);
-              content += `\n\n${processed}`;
-            } catch {
-              console.warn(`Could not process file ${file.name} on the fly.`);
-            }
-          } else {
-            // No content or processedContent, skip
-            console.warn(`No content or processedContent for file ${file.name}`);
-          }
+        if (!file.type.startsWith('image/') && file.processedContent) {
+          combinedText += `\n\n[${file.name} Content]\n${file.processedContent}`;
         }
       }
-      
-      // Ensure we have content
-      const finalContent = content.trim() || '[File uploaded]';
-      
+      const messageContent: MessageContent[] = [];
+      if (combinedText.trim()) {
+        messageContent.push({ type: 'text', text: combinedText.trim() });
+      }
+      // Add all images
+      for (const file of msg.files) {
+        if (file.type.startsWith('image/')) {
+          messageContent.push({
+            type: 'image',
+            image: file.cloudinaryUrl || file.content
+          });
+        }
+      }
+      if (messageContent.length === 0) {
+        messageContent.push({ type: 'text', text: '[File uploaded]' });
+      }
       processedMessages.push({
         role: msg.role,
-        content: messageContent.length > 1 ? messageContent : finalContent
+        content: messageContent
       });
     } else {
       const normalizedContent = normalizeMessageContent(msg.content);
@@ -298,7 +276,6 @@ const createMessagesWithFiles = async (messages: ChatMessage[]): Promise<any[]> 
       });
     }
   }
-  
   return processedMessages;
 };
 
@@ -348,7 +325,7 @@ export async function POST(req: NextRequest) {
     }
 
     const hasImages = processedFiles.some((file: UploadedFile) => file.type.startsWith('image/'));
-    const model = hasImages ? "gpt-4o" : "gpt-3.5-turbo";
+    const model = "gpt-4o";
 
     const memoryContext = await getMemoryContext(prompt, userId);
 
@@ -429,13 +406,13 @@ export async function POST(req: NextRequest) {
     const conversationMessages = await createMessagesWithFiles(chat.messages);
     
     // If using gpt-3.5-turbo, ensure all message contents are strings
-    if (model === 'gpt-3.5-turbo') {
-      for (let i = 0; i < conversationMessages.length; i++) {
-        if (typeof conversationMessages[i].content !== 'string') {
-          conversationMessages[i].content = normalizeMessageContent(conversationMessages[i].content);
-        }
-      }
-    }
+    // if (model === 'gpt-3.5-turbo') {
+    //   for (let i = 0; i < conversationMessages.length; i++) {
+    //     if (typeof conversationMessages[i].content !== 'string') {
+    //       conversationMessages[i].content = normalizeMessageContent(conversationMessages[i].content);
+    //     }
+    //   }
+    // }
 
     // Combine memory context and user prompt for the last user message
     if (conversationMessages.length > 0) {
@@ -453,7 +430,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    console.log('Final conversationMessages sent to AI:', JSON.stringify(conversationMessages, null, 2));
+    // LOG the final payload sent to the model for debugging
+    console.log('=== FINAL conversationMessages SENT TO MODEL ===');
+    console.dir(conversationMessages, { depth: null });
+    console.log('==============================================');
 
     if (stream) {
       const result = await streamText({
