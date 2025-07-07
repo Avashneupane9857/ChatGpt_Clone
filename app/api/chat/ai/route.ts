@@ -46,6 +46,7 @@ interface Memory {
   text?: string;
   content?: string;
   score?: number;
+  memory?: string;
 }
 
 // Helper function to ensure content is always a string for database storage
@@ -126,7 +127,7 @@ const addMemories = async (messages: ChatMessage[], userId: string) => {
       role: msg.role,
       content: normalizeMessageContent(msg.content)
     }));
-    
+    console.log('Saving to memory:', { userId, memoryMessages });
     const result = await memoryClient.add(memoryMessages, { user_id: userId });
     console.log('Memory added:', result);
     return result;
@@ -150,15 +151,14 @@ const searchMemories = async (query: string, userId: string): Promise<Memory[]> 
 const getMemoryContext = async (prompt: string, userId: string) => {
   try {
     const memories = await searchMemories(prompt, userId);
-    
+    console.log('Memory search for prompt:', prompt, 'userId:', userId, 'results:', memories);
     if (memories && memories.length > 0) {
+      // Use .memory field if present, fallback to .text or .content
       const memoryContext = memories.map((memory: Memory) => 
-        memory.text || memory.content || ''
+        memory.memory || memory.text || memory.content || ''
       ).filter(Boolean).join('\n');
-      
       return memoryContext ? `Based on our previous conversations, here's what I remember about you:\n${memoryContext}\n\nNow, regarding your current question:\n` : '';
     }
-    
     return '';
   } catch (error) {
     console.error('Error getting memory context:', error);
@@ -417,37 +417,23 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Combine memory context and user prompt for the last user message
     if (conversationMessages.length > 0) {
       const lastMessage = conversationMessages[conversationMessages.length - 1];
       if (lastMessage.role === 'user') {
+        const finalContent = (memoryContext || '') + userContentForAI;
         if (typeof lastMessage.content === 'string') {
-          lastMessage.content = userContentForAI;
+          lastMessage.content = finalContent;
         } else if (Array.isArray(lastMessage.content)) {
           const textContent = lastMessage.content.find((c: any) => c.type === 'text');
           if (textContent) {
-            textContent.text = userContentForAI;
+            textContent.text = finalContent;
           }
         }
       }
     }
-    
- 
-    console.log('Conversation messages count:', conversationMessages.length);
-    console.log('Last message content type:', typeof conversationMessages[conversationMessages.length - 1]?.content);
-  
-    if (memoryContext && conversationMessages.length > 0) {
-      const lastMessage = conversationMessages[conversationMessages.length - 1];
-      if (lastMessage.role === 'user') {
-        if (typeof lastMessage.content === 'string') {
-          lastMessage.content = memoryContext + lastMessage.content;
-        } else if (Array.isArray(lastMessage.content)) {
-          const textContent = lastMessage.content.find((c: any) => c.type === 'text');
-          if (textContent) {
-            textContent.text = memoryContext + (textContent.text || '');
-          }
-        }
-      }
-    }
+
+    console.log('Final conversationMessages sent to AI:', JSON.stringify(conversationMessages, null, 2));
 
     if (stream) {
       const result = await streamText({
