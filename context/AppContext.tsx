@@ -39,7 +39,7 @@ interface AppContextType {
   setChat: React.Dispatch<React.SetStateAction<Chat[]>>;
   selectedChat: Chat | null;
   setSelectedChat: React.Dispatch<React.SetStateAction<Chat | null>>;
-  fetchUserChats: () => Promise<void>;
+  fetchUserChats: (chatIdToSelect?: string) => Promise<void>;
   createNewChat: () => Promise<void>;
   loadingChats: boolean;
 }
@@ -88,7 +88,7 @@ export const AppContextProvider: React.FC<AppContextProviderProps> = ({
     }
   };
 
-  const fetchUserChats = async (): Promise<void> => {
+  const fetchUserChats = async (chatIdToSelect?: string): Promise<void> => {
     try {
       const token = await getToken();
       const { data } = await axios.get("/api/chat/get", {
@@ -108,7 +108,8 @@ export const AppContextProvider: React.FC<AppContextProviderProps> = ({
         console.log("Fetching chats...");
         console.log("Chat data received:", data.data);
         setChat(data.data);
-        setSelectedChat(data.data[0]); // ✅ properly sets it
+        const chatToSelect = data.data.find((c: Chat) => c._id === chatIdToSelect) || data.data[0];
+        setSelectedChat(chatToSelect);
         console.log("Current selectedChat:", selectedChat);
       } else {
         toast.error(data.message || "Failed to fetch chats");

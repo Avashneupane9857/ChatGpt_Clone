@@ -166,38 +166,6 @@ const getMemoryContext = async (prompt: string, userId: string) => {
   }
 };
 
-// File Upload Functions
-const uploadFilesToCloudinary = async (files: UploadedFile[]): Promise<UploadedFile[]> => {
-  const uploadPromises = files.map(async (file) => {
-    try {
-      // If the file already has a cloudinaryUrl, skip re-uploading
-      if (file.type.startsWith('image/') && file.cloudinaryUrl) {
-        return file;
-      }
-      let fileBuffer;
-      if (file.type.startsWith('image/')) {
-        const base64Data = file.content.split(',')[1];
-        fileBuffer = Buffer.from(base64Data, 'base64');
-      } else {
-        fileBuffer = Buffer.from(file.content, 'utf8');
-      }
-      const { url, publicId } = await uploadToCloudinary(fileBuffer, file.name, file.type);
-      // Return the file with cloudinary info but preserve original content
-      return {
-        ...file,
-        cloudinaryUrl: url,
-        cloudinaryPublicId: publicId,
-        // Keep original content for processing
-        content: file.content
-      };
-    } catch (error) {
-      console.error(`Failed to upload ${file.name}:`, error);
-      throw new Error(`Failed to upload ${file.name}`);
-    }
-  });
-  return Promise.all(uploadPromises);
-};
-
 // Process files and cache the results
 const processAndCacheFiles = async (files: UploadedFile[]): Promise<UploadedFile[]> => {
   const processedFiles = [];
@@ -205,6 +173,11 @@ const processAndCacheFiles = async (files: UploadedFile[]): Promise<UploadedFile
   for (const file of files) {
     // Skip processing if image and already has cloudinaryUrl (editing case)
     if (file.type.startsWith('image/') && file.cloudinaryUrl) {
+      processedFiles.push(file);
+      continue;
+    }
+    // Robust: If file has cloudinaryUrl but no content (already uploaded, e.g. PDF), skip processing
+    if (!file.type.startsWith('image/') && file.cloudinaryUrl && !file.content) {
       processedFiles.push(file);
       continue;
     }
@@ -229,6 +202,38 @@ const processAndCacheFiles = async (files: UploadedFile[]): Promise<UploadedFile
   }
   
   return processedFiles;
+};
+
+// File Upload Functions
+const uploadFilesToCloudinary = async (files: UploadedFile[]): Promise<UploadedFile[]> => {
+  const uploadPromises = files.map(async (file) => {
+    try {
+      // If the file already has a cloudinaryUrl, skip re-uploading (robust for all file types)
+      if (file.cloudinaryUrl) {
+        return file;
+      }
+      let fileBuffer;
+      if (file.type.startsWith('image/')) {
+        const base64Data = file.content.split(',')[1];
+        fileBuffer = Buffer.from(base64Data, 'base64');
+      } else {
+        fileBuffer = Buffer.from(file.content, 'utf8');
+      }
+      const { url, publicId } = await uploadToCloudinary(fileBuffer, file.name, file.type);
+      // Return the file with cloudinary info but preserve original content
+      return {
+        ...file,
+        cloudinaryUrl: url,
+        cloudinaryPublicId: publicId,
+        // Keep original content for processing
+        content: file.content
+      };
+    } catch (error) {
+      console.error(`Failed to upload ${file.name}:`, error);
+      throw new Error(`Failed to upload ${file.name}`);
+    }
+  });
+  return Promise.all(uploadPromises);
 };
 
 // Fixed createMessagesWithFiles function
@@ -399,8 +404,9 @@ export async function POST(req: NextRequest) {
     const validatedUserPrompt = validateMessage(userPrompt);
 
     if (isEdit && typeof editIndex === 'number') {
-      chat.messages = chat.messages.slice(0, editIndex);
-      chat.messages.push(validatedUserPrompt);
+      // Remove all messages after the edited user message (including any old assistant responses)
+      chat.messages = chat.messages.slice(0, editIndex + 1);
+      chat.messages[editIndex] = validatedUserPrompt;
     } else {
       chat.messages.push(validatedUserPrompt);
     }
@@ -516,7 +522,8 @@ export async function POST(req: NextRequest) {
               content: '',
               fullContent: finalContent,
               done: true,
-              message: validatedMessage
+              message: validatedMessage,
+              updatedChat: isEdit ? chat : undefined
             });
             controller.enqueue(encoder.encode(`data: ${finalData}\n\n`));
             
@@ -586,7 +593,7 @@ export async function POST(req: NextRequest) {
         console.error('Failed to add memories:', memoryError);
       }
 
-      return NextResponse.json({ success: true, data: validatedMessage });
+      return NextResponse.json({ success: true, data: validatedMessage, updatedChat: isEdit ? chat : undefined });
     }
   } catch (error) {
     console.error("Error in /api/chat/ai:", error);

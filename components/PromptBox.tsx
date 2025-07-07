@@ -34,7 +34,10 @@ interface PromptBoxProps {
   onStreamingResponse: (
     chatId: string,
     prompt: string,
-    files: UploadedFile[]
+    files: UploadedFile[],
+    callback?: (data: any) => void,
+    isEdit?: boolean,
+    editIndex?: number
   ) => Promise<void>;
   isStreaming: boolean;
 }
@@ -221,14 +224,20 @@ export const PromptBox = ({
       return (
         <div className="relative group">
           <div className="relative rounded-lg overflow-hidden bg-gray-800 w-[120px] h-[120px]">
-            <Image
-              src={file.content}
-              alt={file.name}
-              fill
-              className="object-cover"
-              sizes="120px"
-              unoptimized
-            />
+            {file.content ? (
+              <Image
+                src={file.content}
+                alt={file.name}
+                fill
+                className="object-cover"
+                sizes="120px"
+                unoptimized
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-gray-700 text-white text-xs">
+                No Image
+              </div>
+            )}
             <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all duration-200 flex items-end">
               <div className="p-2 text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200 truncate w-full">
                 {file.name}
@@ -303,7 +312,7 @@ export const PromptBox = ({
         files: uploadedFiles || [],
       } as Message;
 
-      // Remove messages after the edited one
+      // Remove messages after the edited user message (including the old assistant response)
       const messagesUpToEdit = updatedMessages.slice(
         0,
         editingMessage.messageIndex + 1
@@ -313,7 +322,7 @@ export const PromptBox = ({
         if (!prev) return null;
         return {
           ...prev,
-          messages: messagesUpToEdit,
+          messages: messagesUpToEdit, // Only up to the edited user message
         };
       });
 
@@ -324,17 +333,51 @@ export const PromptBox = ({
       setPrompt("");
       setUploadedFiles([]);
 
-      // Start streaming response for the edited message
-      await onStreamingResponse(selectedChat._id, currentPrompt, currentFiles);
+      // Robust: Filter out files that have no content and no cloudinaryUrl (invalid for backend)
+      const validFiles = (currentFiles || []).filter(f => f.content || f.cloudinaryUrl);
 
-      // Refresh chat list and update selectedChat
-      await fetchUserChats();
-      setSelectedChat((prev) => {
-        if (!prev) return null;
-        return {
-          ...prev,
-        };
-      });
+      let updatedChatFromStream = null;
+      await onStreamingResponse(
+        selectedChat._id,
+        currentPrompt,
+        validFiles,
+        (data) => {
+          // Debug log to verify streaming callback
+          console.log('STREAM CALLBACK DATA:', data);
+          if (data && data.updatedChat) {
+            console.log('STREAM CALLBACK updatedChat:', data.updatedChat);
+            updatedChatFromStream = data.updatedChat;
+          }
+        },
+        true, // isEdit
+        editingMessage.messageIndex // editIndex
+      );
+      // If we got an updated chat from the stream, use it
+      if (updatedChatFromStream) {
+        setSelectedChat(updatedChatFromStream);
+      } else {
+        // Defensive fix: After streaming, ensure only the edited user message and new assistant response are present
+        setSelectedChat((prev) => {
+          if (!prev) return null;
+          // Find the latest assistant message (should be the last one)
+          const assistantIndex = prev.messages.findIndex(
+            (msg, idx) =>
+              idx > editingMessage.messageIndex && msg.role === 'assistant'
+          );
+          let messagesUpToEdit = prev.messages.slice(0, editingMessage.messageIndex + 1);
+          if (assistantIndex !== -1) {
+            // If assistant response exists, include it
+            messagesUpToEdit = prev.messages.slice(0, assistantIndex + 1);
+          }
+          return {
+            ...prev,
+            messages: messagesUpToEdit,
+          };
+        });
+      }
+
+      // Always fetch the latest chat from the backend after editing
+      await fetchUserChats(selectedChat?._id);
     } catch (error) {
       console.error("Error editing message:", error);
       toast.error("Failed to edit message");
@@ -386,15 +429,7 @@ export const PromptBox = ({
       setUploadedFiles([]);
 
       await onStreamingResponse(selectedChat._id, currentPrompt, currentFiles);
-
-      // Refresh chat list and update selectedChat
-      await fetchUserChats();
-      setSelectedChat((prev) => {
-        if (!prev) return null;
-        return {
-          ...prev,
-        };
-      });
+      await fetchUserChats(selectedChat?._id);
     } catch (error) {
       console.error("Error sending message:", error);
       toast.error("Failed to send message");

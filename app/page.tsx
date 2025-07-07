@@ -89,7 +89,10 @@ export default function Home() {
   const onStreamingResponse = async (
     chatId: string,
     prompt: string,
-    files?: UploadedFile[]
+    files?: UploadedFile[],
+    callback?: (data: unknown) => void,
+    isEdit?: boolean,
+    editIndex?: number
   ) => {
     try {
       setIsLoading(true);
@@ -107,6 +110,8 @@ export default function Home() {
           prompt,
           files,
           stream: true,
+          isEdit,
+          editIndex
         }),
       });
 
@@ -135,6 +140,10 @@ export default function Home() {
           if (line.startsWith("data: ")) {
             try {
               const data = JSON.parse(line.slice(6));
+
+              if (callback) {
+                callback(data);
+              }
 
               if (data.error) {
                 throw new Error(data.error);
@@ -229,7 +238,10 @@ export default function Home() {
       await onStreamingResponse(
         selectedChat._id,
         userMessage.content,
-        userMessage.files || []
+        userMessage.files || [],
+        undefined,
+        true,
+        userMessageIndex
       );
     } catch (error) {
       console.error("Error regenerating response:", error);
@@ -368,7 +380,7 @@ export default function Home() {
                   isStreaming={true}
                 />
               )}
-
+ 
               {isLoading && !isStreaming && !showPreAnimation && (
                 <div className="flex gap-4 max-w-3xl w-full py-3">
                   <Image
