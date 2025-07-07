@@ -311,15 +311,19 @@ export async function POST(req: NextRequest) {
         console.log('Pre-processing files...');
         processedFiles = await processAndCacheFiles(files);
         console.log('Files pre-processed successfully');
-        
         console.log('Uploading files to Cloudinary...');
         processedFiles = await uploadFilesToCloudinary(processedFiles);
         console.log('Files uploaded successfully:', processedFiles.map(f => f.name));
       } catch (error) {
         console.error('Error processing/uploading files:', error);
+        // Collect file-specific errors if available
+        let errorMsg = 'Failed to process or upload files.';
+        if (error instanceof Error && error.message) {
+          errorMsg += ' Details: ' + error.message;
+        }
         return NextResponse.json({ 
           success: false, 
-          message: "Failed to process or upload files" 
+          error: errorMsg
         });
       }
     }
@@ -517,8 +521,12 @@ export async function POST(req: NextRequest) {
             
           } catch (error) {
             console.error('Streaming error:', error);
+            let errorMsg = 'Streaming error.';
+            if (error instanceof Error && error.message) {
+              errorMsg += ' Details: ' + error.message;
+            }
             const errorData = JSON.stringify({ 
-              error: error instanceof Error ? error.message : "Unknown error",
+              error: errorMsg,
               done: true 
             });
             controller.enqueue(encoder.encode(`data: ${errorData}\n\n`));

@@ -146,7 +146,19 @@ export default function Home() {
               }
 
               if (data.error) {
-                throw new Error(data.error);
+                let msg = data.error;
+                const fileMatch = msg.match(/file[s]?: ([^\)]+)\)/i);
+                if (fileMatch && fileMatch[1]) {
+                  msg += '\nPlease re-upload the affected file(s) or try a different file.';
+                } else if (msg.toLowerCase().includes('process') || msg.toLowerCase().includes('upload')) {
+                  msg += '\nPlease check your files and try again.';
+                }
+                toast.error(msg);
+                setStreamingMessage("");
+                setIsStreaming(false);
+                setShowPreAnimation(false);
+                streamingRef.current = "";
+                return;
               }
 
               if (data.content) {
