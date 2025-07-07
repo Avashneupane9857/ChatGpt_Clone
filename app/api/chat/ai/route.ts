@@ -264,13 +264,21 @@ const createMessagesWithFiles = async (messages: ChatMessage[]): Promise<any[]> 
             image: file.cloudinaryUrl || file.content
           });
         } else {
-          // Use cached processed content if available
+          // Use processedContent if available
           if (file.processedContent) {
             console.log(`Using cached processed content for ${file.name}`);
             content += `\n\n${file.processedContent}`;
+          } else if (file.content) {
+            // If processedContent is missing but content exists, process it now
+            try {
+              const processed = await fileProcessor.processFile(file);
+              content += `\n\n${processed}`;
+            } catch {
+              console.warn(`Could not process file ${file.name} on the fly.`);
+            }
           } else {
-            console.warn(`No processed content available for ${file.name}`);
-            // Don't add error message to content since processing might have succeeded elsewhere
+            // No content or processedContent, skip
+            console.warn(`No content or processedContent for file ${file.name}`);
           }
         }
       }

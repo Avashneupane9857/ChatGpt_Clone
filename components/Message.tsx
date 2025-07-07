@@ -19,6 +19,7 @@ interface UploadedFile {
   cloudinaryUrl?: string;
   cloudinaryPublicId?: string;
   uploadedAt?: Date;
+  processedContent?: string;
 }
 
 interface MessageProps {

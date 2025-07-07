@@ -6,7 +6,8 @@ const FileSchema = new mongoose.Schema({
   size: { type: Number, required: true },
   cloudinaryUrl: { type: String, required: true }, 
   cloudinaryPublicId: { type: String, required: true }, 
-  uploadedAt: { type: Date, default: Date.now }
+  uploadedAt: { type: Date, default: Date.now },
+  processedContent: { type: String }
 });
 
 const MessageSchema = new mongoose.Schema({

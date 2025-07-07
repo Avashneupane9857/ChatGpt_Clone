@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { assets } from "@/assets/assets";
 import { useAppContext } from "@/context/AppContext";
 import { useClerk } from "@clerk/nextjs";
@@ -12,6 +13,7 @@ interface UploadedFile {
   content: string;
   url?: string;
   cloudinaryUrl?: string;
+  processedContent?: string;
 }
 
 interface Message {
@@ -60,7 +62,12 @@ export const PromptBox = ({
     if (editingMessage) {
       setPrompt(editingMessage.content);
       if (selectedChat && selectedChat.messages[editingMessage.messageIndex]?.files) {
-        setUploadedFiles(selectedChat.messages[editingMessage.messageIndex].files ?? []);
+        const originalFiles = selectedChat.messages[editingMessage.messageIndex].files ?? [];
+        setUploadedFiles(
+          originalFiles.map((file) => {
+            return { ...file, processedContent: file.processedContent };
+          })
+        );
       } else {
         setUploadedFiles([]);
       }
@@ -335,6 +342,20 @@ export const PromptBox = ({
 
       // Robust: Filter out files that have no content and no cloudinaryUrl (invalid for backend)
       const validFiles = (currentFiles || []).filter(f => f.content || f.cloudinaryUrl);
+      const skippedFiles = (currentFiles || []).filter(f => !f.content && !f.cloudinaryUrl);
+      if (skippedFiles.length > 0) {
+        toast(`Some files were skipped: ${skippedFiles.map(f => f.name).join(', ')}`, {
+          style: { background: '#facc15', color: '#222' },
+        });
+      }
+
+      // Block edit if any non-image file is missing processedContent
+      const missingContentFiles = validFiles.filter(f => !f.type.startsWith('image/') && !f.processedContent);
+      if (missingContentFiles.length > 0) {
+        toast.error(`Cannot edit: The following files are missing content and must be re-uploaded: ${missingContentFiles.map(f => f.name).join(', ')}`);
+        setIsLoading(false);
+        return;
+      }
 
       let updatedChatFromStream = null;
       await onStreamingResponse(

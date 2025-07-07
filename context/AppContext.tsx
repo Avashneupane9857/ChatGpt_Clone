@@ -17,6 +17,7 @@ interface UploadedFile {
   size: number;
   content: string;
   url?: string;
+  processedContent?: string;
 }
 
 interface Chat {
